@@ -7,7 +7,7 @@ import java.util.stream.Collectors;
 
 import priv.dm.common.config.CopyItem;
 import priv.dm.common.config.DES3Util;
-import com.common.config.ParamFormat;
+import priv.dm.common.config.ParamFormat;
 import priv.dm.common.config.SSHConfig;
 import priv.dm.common.config.StrUtil;
 import priv.dm.common.console.MyConsoleCollect;

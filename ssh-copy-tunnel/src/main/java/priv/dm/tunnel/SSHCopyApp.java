@@ -1,7 +1,7 @@
 package priv.dm.tunnel;
 
 import priv.dm.common.config.DES3Util;
-import com.common.config.ParamFormat;
+import priv.dm.common.config.ParamFormat;
 import priv.dm.common.config.SSHConfig;
 import priv.dm.common.ssh.Logf;
 import priv.dm.common.ssh.SSHClientPool;

@@ -1,4 +1,4 @@
-package com.common.config;
+package priv.dm.common.config;
 
 import java.util.LinkedList;
 import java.util.List;
