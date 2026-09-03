@@ -1,6 +1,7 @@
 package org.open.scdm.common.ssh;
 
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.SSHConfig;
@@ -14,16 +15,19 @@ public class SSHClientPool extends ABSDispatcher {
 	 */
 	private SSHClientImpl[] clientImpls;
 	/**
-	 * 指针
+	 * 轮询指针：原为 int + synchronized，高并发下每次取会话都抢全局锁。
+	 * 改为 AtomicInteger 无锁轮询，配合多 Session 池分散负载。
 	 */
-	private int index = 0;
+	private final AtomicInteger index = new AtomicInteger(0);
 	private static final long ERROR_WAIT_TIME = 5000;
 	private final int poolSize;
 
 	public SSHClientPool(SSHConfig sshConfig) {
 		super();
-//		this.poolSize = sshConfig.getPool();
-		this.poolSize = 1;
+		// 恢复多 Session 连接池：原硬编码 poolSize=1 使所有 SOCKS5 通道复用单个 SSH Session，
+		// 单条 SSH TCP 连接的加密/多路复用成为吞吐瓶颈。多 Session 可将负载分散到多条连接上。
+		Integer configured = sshConfig.getPool();
+		this.poolSize = (configured == null || configured < 1) ? 1 : configured;
 		clientImpls = new SSHClientImpl[poolSize];
 		List<CopyItem> copyItems = sshConfig.getLocals();
 		PortForwardServer[] forwardServers = new PortForwardServer[copyItems.size()];
@@ -88,17 +92,14 @@ public class SSHClientPool extends ABSDispatcher {
 	}
 
 	public Session trySession() {
-		SSHClientImpl clientImpl;
-		synchronized (this) {
-			for (int i = 0; i < poolSize; i++) {
-				// 找会话
-				if (index == poolSize) {
-					index = 0;
-				}
-				clientImpl = clientImpls[index++];
-				if (clientImpl.isConnected()) {
-					return clientImpl.getSession();
-				}
+		int size = poolSize;
+		// 无锁轮询：从上次位置的下一个开始，找到一个已连接的 Session。
+		// floorMod 保证 getAndIncrement 溢出为负数时仍能得到合法下标。
+		for (int i = 0; i < size; i++) {
+			int idx = Math.floorMod(index.getAndIncrement(), size);
+			SSHClientImpl clientImpl = clientImpls[idx];
+			if (clientImpl.isConnected()) {
+				return clientImpl.getSession();
 			}
 		}
 		return null;

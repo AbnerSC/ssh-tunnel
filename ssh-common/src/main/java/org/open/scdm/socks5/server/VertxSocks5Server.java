@@ -5,6 +5,7 @@ import org.open.scdm.common.vertx.VertxUtil;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.net.NetServer;
+import io.vertx.core.net.NetServerOptions;
 
 /**
  * socks5服务器
@@ -36,7 +37,13 @@ public class VertxSocks5Server {
 
 	public void start(int port) {
 		Vertx vertx = VertxUtil.current().getVertx();
-		netServer = vertx.createNetServer();
+		// tcpNoDelay 关闭 Nagle，降低代理转发延迟；acceptBacklog 增大半连接队列，
+		// 避免高并发瞬时大量连接请求被内核拒接；reuseAddress 便于快速重启。
+		NetServerOptions serverOptions = new NetServerOptions()
+				.setTcpNoDelay(true)
+				.setReuseAddress(true)
+				.setAcceptBacklog(1024);
+		netServer = vertx.createNetServer(serverOptions);
 		netServer
 				// 处理链路
 				.connectHandler(c -> new VertxSocks5Impl(auth, userName, password, clientConsumer, c))

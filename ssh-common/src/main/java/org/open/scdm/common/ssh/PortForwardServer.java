@@ -9,6 +9,7 @@ import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
 
 import io.vertx.core.Vertx;
+import io.vertx.core.net.NetServerOptions;
 import io.vertx.core.net.NetSocket;
 
 /**
@@ -29,7 +30,12 @@ public class PortForwardServer {
 		this.copyItem = copyItem;
 		Vertx vertx = VertxUtil.current().getVertx();
 		final int port = copyItem.getTargetPort();
-		vertx.createNetServer()
+		// 同 SOCKS5 服务：tcpNoDelay 降延迟，acceptBacklog 抗高并发瞬时连接，reuseAddress 便于重启
+		NetServerOptions serverOptions = new NetServerOptions()
+				.setTcpNoDelay(true)
+				.setReuseAddress(true)
+				.setAcceptBacklog(1024);
+		vertx.createNetServer(serverOptions)
 				// 当被连接时
 				.connectHandler(c -> {
 					c.pause();

@@ -30,13 +30,12 @@ public class AsynchOutputStream extends OutputStream {
 	}
 
 	public void write(byte[] bytes, int off, int len) throws IOException {
-		byte[] body = new byte[len];
-		for (int i = 0; i < body.length; i++)
-			body[i] = bytes[i + off];
-		if (body.length == 0) {
+		if (len <= 0) {
 			close();
 			return;
 		}
+		byte[] body = new byte[len];
+		System.arraycopy(bytes, off, body, 0, len);
 		this.socket.write(Buffer.buffer(body));
 	}
 

@@ -7,7 +7,6 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
-
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.SSHConfig;
 import org.open.scdm.common.config.StrUtil;
@@ -26,22 +25,29 @@ public class SSHClientImpl {
 	 */
 	private static JSch jsch = new JSch();
 	/**
-	 * 待连接
+	 * 待连接。volatile：调度线程(虚拟线程)写、trySession/getSession(event loop)读，
+	 * 需保证跨线程可见性，否则 event loop 可能读到过期状态。
 	 */
-	public SSHStatusEnum sshStatus = SSHStatusEnum.AWAIT_CONNECT;
+	public volatile SSHStatusEnum sshStatus = SSHStatusEnum.AWAIT_CONNECT;
 	/**
 	 * 是否是主会话
 	 */
 	private final AtomicBoolean main = new AtomicBoolean(false);
 	/**
-	 * 最后的会话
+	 * 最后的会话。volatile 保证 openSession(虚拟线程)与 getSession(event loop)间的可见性
 	 */
-	private Session lastSession;
+	private volatile Session lastSession;
 
 	/**
-	 * 字符界面
+	 * 字符界面。volatile 原因同 lastSession
 	 */
-	private ChannelShell channelShell;
+	private volatile ChannelShell channelShell;
+	/**
+	 * 心跳重入保护：调度器每 500ms 提交一次 sendKeepAliveMsg 到虚拟线程，
+	 * 若上一次心跳因网络慢尚未返回，会叠加并发执行导致 inputStream/outputStream 交错读写。
+	 * 虚拟线程化后任务提交更密集，重入风险放大，必须用 CAS 保证同一会话心跳串行。
+	 */
+	private final AtomicBoolean keepAliveRunning = new AtomicBoolean(false);
 	/**
 	 * 输入流
 	 */
@@ -97,26 +103,34 @@ public class SSHClientImpl {
 	}
 
 	public void sendKeepAliveMsg() throws Exception {
-		if (isConnected()) {
-//			System.out.println("心跳");
-			lastSession.sendKeepAliveMsg();
-			if (inputStream.available() > 0) {
-				byte[] bytes = new byte[8192];
-				int a = inputStream.read(bytes);
-				if (a != -1) {
-					String str = new String(bytes, 0, a, StandardCharsets.UTF_8);
-					if (StrUtil.isEmpty(str)) {
-						throw new RuntimeException();
-					}
-				}
-			}
-			outputStream.write("free -h\r\n".getBytes(StandardCharsets.UTF_8));
-			outputStream.flush();
-			sshStatus = SSHStatusEnum.CONNECTED;
-			checkAndBandForPort();
+		// 心跳重入保护：上一次心跳未完成则直接返回，避免多个虚拟线程并发读写同一会话的流
+		if (!keepAliveRunning.compareAndSet(false, true)) {
 			return;
 		}
-		throw new RuntimeException();
+		try {
+			if (isConnected()) {
+//				System.out.println("心跳");
+				lastSession.sendKeepAliveMsg();
+				if (inputStream.available() > 0) {
+					byte[] bytes = new byte[8192];
+					int a = inputStream.read(bytes);
+					if (a != -1) {
+						String str = new String(bytes, 0, a, StandardCharsets.UTF_8);
+						if (StrUtil.isEmpty(str)) {
+							throw new RuntimeException();
+						}
+					}
+				}
+				outputStream.write("free -h\r\n".getBytes(StandardCharsets.UTF_8));
+				outputStream.flush();
+				sshStatus = SSHStatusEnum.CONNECTED;
+				checkAndBandForPort();
+				return;
+			}
+			throw new RuntimeException();
+		} finally {
+			keepAliveRunning.set(false);
+		}
 	}
 
 	/**
