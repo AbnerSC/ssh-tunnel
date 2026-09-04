@@ -4,7 +4,7 @@
 ### JDK 25
 
 ### 依赖
-- [com.github.mwiede:jsch](https://github.com/mwiede/jsch) 2.28.7（`com.jcraft:jsch` 停维后的社区分支，包名不变）
+- [com.github.mwiede:jsch](https://github.com/mwiede/jsch) 2.28.7
 - [io.vertx:vertx-core](https://vertx.io/) 5.1.7
 - [org.projectlombok:lombok](https://projectlombok.org/) 1.18.46
 
