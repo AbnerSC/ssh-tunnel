@@ -50,9 +50,33 @@ WORKDIR /app
 
 COPY --from=build /build/ssh-copy-tunnel/target/ssh-tunnel.jar app.jar
 
-# 低内存调优：Serial GC + 固定小堆（socks5 转发为轻量 IO，无需大堆）；
-# --enable-native-access 抑制 vertx 可选 native 传输在 JDK 25 下的告警
-ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:+UseCompactObjectHeaders", "-XX:+UseSerialGC", "-Xms32m", "-Xmx128m", "-Xss512k", "-XX:MaxMetaspaceSize=64m", "-XX:ReservedCodeCacheSize=64m", "-jar", "app.jar"]
+# 入口脚本：把容器运行时环境变量翻译成程序命令行参数后再启动 JVM。
+# 低内存 JVM 调优（Serial GC + 固定小堆 + --enable-native-access 抑制 JDK 25 告警）
+# 已内置于脚本，可用环境变量 JAVA_OPTS 整体覆盖；命令行显式传入的参数优先级最高
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# Windows 下检出可能带 CRLF，构建时统一去除，避免 shebang 解析失败
+RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# socks5 监听端口（README 示例 -D 6666），实际端口由启动参数决定
+# 运行时环境变量（均可选，未设置或为空则不传对应参数；详见 README）：
+#   SOCKS_PORT     -> -D      本地 socks5 监听端口
+#   SOCKS_USER     -> -suser  socks5 代理账号
+#   SOCKS_PASSWORD -> -spwd   socks5 代理密码
+#   SSH_SERVER     -> -server 隧道服务器地址与账号，如 root@1.2.3.4
+#   SSH_PORT       -> -p      服务器 SSH 端口
+#   SSH_PASSWORD   -> -P      服务器 SSH 密码
+#   SSH_POOL       -> -pool   SSH 连接池大小（默认 5）
+#   JAVA_OPTS      -> 覆盖默认 JVM 调优参数
+ENV SOCKS_PORT= \
+    SOCKS_USER= \
+    SOCKS_PASSWORD= \
+    SSH_SERVER= \
+    SSH_PORT= \
+    SSH_PASSWORD= \
+    SSH_POOL= \
+    JAVA_OPTS=
+
+ENTRYPOINT ["docker-entrypoint.sh"]
+
+# socks5 监听端口（README 示例 -D 6666），实际端口由启动参数/环境变量决定
 EXPOSE 6666
