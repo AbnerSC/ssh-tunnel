@@ -58,3 +58,14 @@ services:
 | `SSH_PASSWORD` | `-P` | 服务器SSH密码 |
 | `SSH_POOL` | `-pool` | SSH连接池大小（默认5） |
 | `JAVA_OPTS` | - | 覆盖镜像内置的 JVM 调优参数 |
+
+### 使用测试
+
+1. 测试HTTP代理
+```bash
+# 未配置账号密码
+curl -x http://127.0.0.1:6667 https://www.google.com
+
+# 已配置账号密码
+curl -x http://socks_user:socks_pwd@127.0.0.1:6667 https://www.google.com
+```
