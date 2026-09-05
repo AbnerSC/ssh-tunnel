@@ -56,7 +56,9 @@ public class SSHClientPool extends ABSDispatcher {
 			case AWAIT_CONNECT:
 				// 连接
 				if (time > clientImpl.getNextRunTime()) {
-					sshStatus = SSHStatusEnum.CONNECTING;
+					// 直接置客户端状态为 CONNECTING：原写法只改了局部变量 sshStatus，
+					// clientImpl 仍是 AWAIT_CONNECT，异步 openSession 未及时执行时会被重复调度。
+					clientImpl.sshStatus = SSHStatusEnum.CONNECTING;
 					pushSpecialTask(clientImpl, () -> clientImpl.openSession());
 				}
 				break;
@@ -112,7 +114,7 @@ public class SSHClientPool extends ABSDispatcher {
 				task.run();
 			} catch (Exception e) {
 				if (Logf.isLog()) {
-					Logf.log("%s", "发生运行时异常");
+					Logf.log("发生运行时异常: %s", e.getMessage() == null ? e.toString() : e.getMessage());
 					e.printStackTrace();
 				}
 				clientImpl.setNextRunTime(System.currentTimeMillis() + ERROR_WAIT_TIME);

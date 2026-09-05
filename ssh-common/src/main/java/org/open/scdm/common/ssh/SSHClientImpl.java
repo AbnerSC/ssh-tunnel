@@ -1,16 +1,9 @@
 package org.open.scdm.common.ssh;
 
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.SSHConfig;
-import org.open.scdm.common.config.StrUtil;
-import com.jcraft.jsch.ChannelShell;
 import com.jcraft.jsch.JSch;
 import com.jcraft.jsch.JSchException;
 import com.jcraft.jsch.Session;
@@ -24,6 +17,19 @@ public class SSHClientImpl {
 	 * ssh工具
 	 */
 	private static JSch jsch = new JSch();
+	/**
+	 * 会话连接超时(ms)：TCP + SSH 握手阶段上限，避免 connect() 无限阻塞虚拟线程
+	 */
+	private static final int CONNECT_TIMEOUT = 10000;
+	/**
+	 * SSH 层心跳间隔(ms)：由 JSch 会话线程自动发送 keepalive 保活并探测失效，
+	 * 取代原先“开 shell 通道跑命令”的脆弱探活方式
+	 */
+	private static final int SERVER_ALIVE_INTERVAL = 15000;
+	/**
+	 * 连续多少次心跳无响应即判定会话失效
+	 */
+	private static final int SERVER_ALIVE_COUNT_MAX = 3;
 	/**
 	 * 待连接。volatile：调度线程(虚拟线程)写、trySession/getSession(event loop)读，
 	 * 需保证跨线程可见性，否则 event loop 可能读到过期状态。
@@ -39,23 +45,10 @@ public class SSHClientImpl {
 	private volatile Session lastSession;
 
 	/**
-	 * 字符界面。volatile 原因同 lastSession
-	 */
-	private volatile ChannelShell channelShell;
-	/**
 	 * 心跳重入保护：调度器每 500ms 提交一次 sendKeepAliveMsg 到虚拟线程，
-	 * 若上一次心跳因网络慢尚未返回，会叠加并发执行导致 inputStream/outputStream 交错读写。
-	 * 虚拟线程化后任务提交更密集，重入风险放大，必须用 CAS 保证同一会话心跳串行。
+	 * 若上一次心跳尚未返回会叠加并发执行，用 CAS 保证同一会话心跳串行。
 	 */
 	private final AtomicBoolean keepAliveRunning = new AtomicBoolean(false);
-	/**
-	 * 输入流
-	 */
-	private InputStream inputStream;
-	/**
-	 * 输出流
-	 */
-	private OutputStream outputStream;
 	/**
 	 * 下次运行时间
 	 */
@@ -81,53 +74,43 @@ public class SSHClientImpl {
 	}
 
 	public boolean isConnected() {
-		return SSHStatusEnum.CONNECTED.equals(sshStatus) && lastSession != null && channelShell != null
-				&& channelShell.isConnected();
+		Session session = lastSession;
+		return SSHStatusEnum.CONNECTED.equals(sshStatus) && session != null && session.isConnected();
 	}
 
 	public void openSession() throws Exception {
 		sshStatus = SSHStatusEnum.CONNECTING;
 		Logf.log("尝试创建连接%s", sshConfig.toScript());
-		// 创建连接
-		lastSession = createServerTarget();
-		lastSession.setDaemonThread(true);
-		lastSession.connect();
-		channelShell = (ChannelShell) lastSession.openChannel("shell");
-		inputStream = channelShell.getInputStream();
-		channelShell.setPty(true);
-		channelShell.connect();
-		outputStream = channelShell.getOutputStream();
+		// 仅建立 SSH 会话，不再打开 shell 通道：
+		// SOCKS5/端口转发走的是 Session 上的 direct-tcpip 通道，与交互式 shell 无关。
+		// 部分服务端(如 nologin/ForceCommand/仅允许转发)会立即关闭 shell 通道，
+		// 若把会话存活绑定在 shell 上，会导致本可正常转发的会话被误判失效并反复重连。
+		Session session = createServerTarget();
+		session.setDaemonThread(true);
+		session.connect(CONNECT_TIMEOUT);
+		lastSession = session;
 		Logf.log("创建连接成功%s", sshConfig.toScript());
 		sshStatus = SSHStatusEnum.CONNECTED;
 		connectedFun.run();
 	}
 
 	public void sendKeepAliveMsg() throws Exception {
-		// 心跳重入保护：上一次心跳未完成则直接返回，避免多个虚拟线程并发读写同一会话的流
+		// 心跳重入保护：上一次心跳未完成则直接返回
 		if (!keepAliveRunning.compareAndSet(false, true)) {
 			return;
 		}
 		try {
-			if (isConnected()) {
-//				System.out.println("心跳");
-				lastSession.sendKeepAliveMsg();
-				if (inputStream.available() > 0) {
-					byte[] bytes = new byte[8192];
-					int a = inputStream.read(bytes);
-					if (a != -1) {
-						String str = new String(bytes, 0, a, StandardCharsets.UTF_8);
-						if (StrUtil.isEmpty(str)) {
-							throw new RuntimeException();
-						}
-					}
-				}
-				outputStream.write("free -h\r\n".getBytes(StandardCharsets.UTF_8));
-				outputStream.flush();
-				sshStatus = SSHStatusEnum.CONNECTED;
+			Session session = lastSession;
+			if (SSHStatusEnum.CONNECTED.equals(sshStatus) && session != null && session.isConnected()) {
+				// 主动探测：在会话传输层发送 SSH keepalive 全局请求，链路已断时会抛异常触发重连。
+				// 不再依赖 shell 通道跑命令，避免服务端禁用交互 shell 时误杀健康会话。
+				session.sendKeepAliveMsg();
 				checkAndBandForPort();
 				return;
 			}
-			throw new RuntimeException();
+			// 会话已失效：抛出带诊断信息的异常，明确是状态、会话对象还是底层连接的问题
+			throw new RuntimeException(String.format("SSH 会话已失效: status=%s, session=%s", sshStatus,
+					session == null ? "null" : ("isConnected=" + session.isConnected())));
 		} finally {
 			keepAliveRunning.set(false);
 		}
@@ -147,6 +130,10 @@ public class SSHClientImpl {
 		session.setConfig("PreferredAuthentications", "publickey,keyboard-interactive,password");
 		properties.put("TCPKeepAlive", "yes");
 		session.setConfig(properties);
+		// SSH 层心跳：由 JSch 会话线程按间隔自动发送 keepalive，连续无响应达上限即断开会话，
+		// 用于探测静默断链(NAT/防火墙空闲超时等)，无需应用层再开 shell 通道跑命令。
+		session.setServerAliveInterval(SERVER_ALIVE_INTERVAL);
+		session.setServerAliveCountMax(SERVER_ALIVE_COUNT_MAX);
 		return session;
 	}
 
@@ -199,23 +186,14 @@ public class SSHClientImpl {
 				server.setSshSupplier(null);
 			}
 		}
-		// 销毁终端
-		closed(inputStream);
-		closed(outputStream);
-		inputStream = null;
-		outputStream = null;
-		if (channelShell != null) {
-			channelShell.disconnect();
-		}
-		channelShell = null;
-		// 销毁会话
+		// 销毁会话（不再涉及 shell 通道与其输入输出流）
 		Session session = lastSession;
 		if (session != null) {
 			delPortForwardingR(session);
 			session.disconnect();
 		}
 		lastSession = null;
-		bandForPort=false;
+		bandForPort = false;
 	}
 
 	private void delPortForwardingR(Session session) {
@@ -225,15 +203,6 @@ public class SSHClientImpl {
 					session.delPortForwardingR(copyItem.getTargetPort());
 				} catch (JSchException e) {
 				}
-			}
-		}
-	}
-
-	public void closed(Closeable closeable) {
-		if (closeable != null) {
-			try {
-				closeable.close();
-			} catch (IOException e) {
 			}
 		}
 	}

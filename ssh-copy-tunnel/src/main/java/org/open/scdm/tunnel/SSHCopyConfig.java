@@ -43,6 +43,8 @@ public class SSHCopyConfig {
 		String serverUserName = format.getValue("-server", null);
 		String serverHost = null;
 		if (StrUtil.isNotEmpty(serverUserName)) {
+			// 容错：去掉误加的首尾引号，避免主机名带上 " 而无法解析(UnknownHostException)
+			serverUserName = StrUtil.stripQuote(serverUserName);
 			int a = serverUserName.indexOf("@");
 			serverHost = a == -1 ? serverUserName : serverUserName.substring(a + 1);
 			serverUserName = a == -1 ? "root" : serverUserName.substring(0, a);
