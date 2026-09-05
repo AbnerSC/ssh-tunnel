@@ -13,11 +13,11 @@ import io.vertx.core.net.NetSocket;
  * 异步输出流
  */
 public class AsynchOutputStream extends OutputStream {
-	private NetSocket socket;
+	private final NetSocket socket;
 
-	private String host;
+	private final String host;
 
-	private Integer port;
+	private final Integer port;
 
 	public AsynchOutputStream(String host, Integer port, NetSocket socket, ChannelDirectTCPIP channel) {
 		this.host = host;

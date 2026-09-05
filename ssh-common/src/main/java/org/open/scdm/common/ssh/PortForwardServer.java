@@ -3,6 +3,7 @@ package org.open.scdm.common.ssh;
 import java.io.IOException;
 import java.util.function.Supplier;
 
+import lombok.Setter;
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.vertx.VertxUtil;
 import com.jcraft.jsch.JSchException;
@@ -20,11 +21,13 @@ public class PortForwardServer {
 	/**
 	 * 
 	 */
-	private Supplier<Session> sshSupplier;
+	@Setter
+    private Supplier<Session> sshSupplier;
+
 	/**
 	 * 端口
 	 */
-	private CopyItem copyItem;
+	private final CopyItem copyItem;
 
 	public PortForwardServer(CopyItem copyItem) {
 		this.copyItem = copyItem;
@@ -66,10 +69,6 @@ public class PortForwardServer {
 		socket.close();
 	}
 
-	public void setSshSupplier(Supplier<Session> sshSupplier) {
-		this.sshSupplier = sshSupplier;
-	}
-
-	public void close() {
+    public void close() {
 	}
 }

@@ -13,7 +13,7 @@ public class SSHClientPool extends ABSDispatcher {
 	/**
 	 * 客户端实现
 	 */
-	private SSHClientImpl[] clientImpls;
+	private final SSHClientImpl[] clientImpls;
 	/**
 	 * 轮询指针：原为 int + synchronized，高并发下每次取会话都抢全局锁。
 	 * 改为 AtomicInteger 无锁轮询，配合多 Session 池分散负载。
@@ -59,12 +59,12 @@ public class SSHClientPool extends ABSDispatcher {
 					// 直接置客户端状态为 CONNECTING：原写法只改了局部变量 sshStatus，
 					// clientImpl 仍是 AWAIT_CONNECT，异步 openSession 未及时执行时会被重复调度。
 					clientImpl.sshStatus = SSHStatusEnum.CONNECTING;
-					pushSpecialTask(clientImpl, () -> clientImpl.openSession());
+					pushSpecialTask(clientImpl, clientImpl::openSession);
 				}
 				break;
 			case CONNECTED:
 				// 维持心跳
-				pushSpecialTask(clientImpl, () -> clientImpl.sendKeepAliveMsg());
+				pushSpecialTask(clientImpl, clientImpl::sendKeepAliveMsg);
 				break;
 			default:
 				break;

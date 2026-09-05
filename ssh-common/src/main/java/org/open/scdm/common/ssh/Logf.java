@@ -1,10 +1,14 @@
 package org.open.scdm.common.ssh;
 
+import lombok.Getter;
+
 /**
  * 日志工具
  */
 public class Logf {
-	private static boolean log = false;
+
+	@Getter
+    private static boolean log = false;
 
 	public static void printf(String format, Object... args) {
 		System.out.println(String.format(format, args));
@@ -18,8 +22,5 @@ public class Logf {
 
 	public static void setLog(boolean log) {
 		Logf.log = log;
-	}
-	public static boolean isLog() {
-		return log;
 	}
 }

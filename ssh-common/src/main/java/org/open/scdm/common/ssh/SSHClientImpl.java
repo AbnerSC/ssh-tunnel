@@ -2,6 +2,9 @@ package org.open.scdm.common.ssh;
 
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import lombok.Getter;
+import lombok.Setter;
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.SSHConfig;
 import com.jcraft.jsch.JSch;
@@ -16,7 +19,7 @@ public class SSHClientImpl {
 	/**
 	 * ssh工具
 	 */
-	private static JSch jsch = new JSch();
+	private static final JSch jsch = new JSch();
 	/**
 	 * 会话连接超时(ms)：TCP + SSH 握手阶段上限，避免 connect() 无限阻塞虚拟线程
 	 */
@@ -52,7 +55,9 @@ public class SSHClientImpl {
 	/**
 	 * 下次运行时间
 	 */
-	private long nextRunTime;
+	@Getter
+    @Setter
+    private long nextRunTime;
 	/**
 	 * 链接方法
 	 */
@@ -60,7 +65,7 @@ public class SSHClientImpl {
 	/**
 	 * 端口转发
 	 */
-	private PortForwardServer[] forwardServers;
+	private final PortForwardServer[] forwardServers;
 	/**
 	 * 绑定端口转发
 	 */
@@ -201,7 +206,7 @@ public class SSHClientImpl {
 			for (CopyItem copyItem : sshConfig.getRemotes()) {
 				try {
 					session.delPortForwardingR(copyItem.getTargetPort());
-				} catch (JSchException e) {
+				} catch (JSchException _) {
 				}
 			}
 		}
@@ -213,14 +218,6 @@ public class SSHClientImpl {
 
 	public boolean isMain() {
 		return main.get();
-	}
-
-	public void setNextRunTime(long nextRunTime) {
-		this.nextRunTime = nextRunTime;
-	}
-
-	public long getNextRunTime() {
-		return nextRunTime;
 	}
 
 }

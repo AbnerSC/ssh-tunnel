@@ -18,14 +18,14 @@ public class VertxHttpProxyServer {
 	/**
 	 * 账号
 	 */
-	private String userName;
+	private final String userName;
 	/**
 	 * 密码
 	 */
-	private String password;
+	private final String password;
 
-	private HttpProxyClientConsumer clientConsumer;
-	private boolean auth;
+	private final HttpProxyClientConsumer clientConsumer;
+	private final boolean auth;
 
 	public VertxHttpProxyServer(String userName, String password, HttpProxyClientConsumer clientConsumer) {
 		super();
