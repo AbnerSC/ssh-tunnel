@@ -9,10 +9,10 @@
 - [org.projectlombok:lombok](https://projectlombok.org/) 1.18.46
 
 ### 使用说明
-1. 示例：`java -jar ssh-tunnel.jar -D 6666 -H 8080 -suser "socks_user" -spwd "socks_pwd" -server root@1.2.3.4 -p 22 -P "server_pwd"`
+1. 示例：`java -jar ssh-tunnel.jar -D 6666 -H 6667 -suser "socks_user" -spwd "socks_pwd" -server root@1.2.3.4 -p 22 -P "server_pwd"`
 2. 参数说明：
 - `-D 6666`：本地socks5监听端口
-- `-H 8080`：本地http代理监听端口（支持 CONNECT 隧道与普通 HTTP 转发）
+- `-H 6667`：本地http代理监听端口（支持 CONNECT 隧道与普通 HTTP 转发）
 - `-suser "socks_user"`：代理账号，socks5 与 http 代理共用【可选参数】
 - `-spwd "socks_pwd"`：代理密码，socks5 与 http 代理共用【可选参数】
 - `-server root@1.2.3.4`：作为隧道的服务器地址和账号
@@ -32,7 +32,7 @@ services:
     hostname: linux
     environment:
       - SOCKS_PORT=6666
-      - HTTP_PORT=8080
+      - HTTP_PORT=6667
       - SOCKS_USER=socks_user
       - SOCKS_PASSWORD=socks_pwd
       - SSH_SERVER=root@1.2.3.4
@@ -41,7 +41,7 @@ services:
       - SSH_POOL=6
     ports:
       - 16666:6666
-      - 18080:8080
+      - 16667:6667
     mem_limit: 256m
 ```
 

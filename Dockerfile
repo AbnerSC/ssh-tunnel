@@ -81,4 +81,4 @@ ENV SOCKS_PORT= \
 ENTRYPOINT ["docker-entrypoint.sh"]
 
 # socks5 监听端口（README 示例 -D 6666），实际端口由启动参数/环境变量决定
-EXPOSE 6666
+EXPOSE 6666,6667
