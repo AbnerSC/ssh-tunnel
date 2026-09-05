@@ -8,16 +8,6 @@
 - [io.vertx:vertx-core](https://vertx.io/) 5.1.7
 - [org.projectlombok:lombok](https://projectlombok.org/) 1.18.46
 
-### 构建
-需将 `JAVA_HOME` 指向 JDK 25：
-
-```powershell
-$env:JAVA_HOME = "<JDK 25 安装路径>"
-mvn -U clean package
-```
-
-产物：`ssh-copy-tunnel/target/ssh-tunnel.jar`
-
 ### 使用说明
 1. 示例：`java -jar ssh-tunnel.jar -D 6666 -suser "socks_user" -spwd "socks_pwd" -server root@1.2.3.4 -p 22 -P "server_pwd"`
 2. 参数说明：
@@ -30,9 +20,26 @@ mvn -U clean package
 - `-pool 5`：SSH连接池大小【可选参数，默认5】
 
 ### Docker 运行
-镜像入口脚本（`docker-entrypoint.sh`）会把环境变量翻译成对应的启动参数，因此既可用环境变量配置，也可继续沿用命令行参数方式（命令行参数追加在最后，优先级更高）。
+```yaml
+services:
+  ssh-tunnel:
+    image: babyfly/ssh-tunnel:latest
+    container_name: ssh-tunnel
+    hostname: linux
+    environment:
+      - SOCKS_PORT=6666
+      - SOCKS_USER=socks_user
+      - SOCKS_PASSWORD=socks_pwd
+      - SSH_SERVER=root@1.2.3.4
+      - SSH_PORT=2
+      - SSH_PASSWORD=server_pwd
+      - SSH_POOL=6
+    ports:
+      - 16666:6666
+    mem_limit: 256m
+```
 
-1. 环境变量说明（均可选，未设置或为空则不传对应参数）：
+- 环境变量说明：
 
 | 环境变量 | 对应参数 | 说明 |
 | --- | --- | --- |
@@ -44,23 +51,3 @@ mvn -U clean package
 | `SSH_PASSWORD` | `-P` | 服务器SSH密码 |
 | `SSH_POOL` | `-pool` | SSH连接池大小（默认5） |
 | `JAVA_OPTS` | - | 覆盖镜像内置的 JVM 调优参数 |
-
-2. 环境变量方式示例：
-
-```bash
-docker run -d --name ssh-tunnel -p 6666:6666 \
-  -e SOCKS_PORT=6666 \
-  -e SOCKS_USER=socks_user \
-  -e SOCKS_PASSWORD=socks_pwd \
-  -e SSH_SERVER=root@1.2.3.4 \
-  -e SSH_PORT=22 \
-  -e SSH_PASSWORD=server_pwd \
-  ssh-tunnel:latest
-```
-
-3. 仍可用命令行参数方式（与原生 jar 一致）：
-
-```bash
-docker run -d --name ssh-tunnel -p 6666:6666 \
-  ssh-tunnel:latest -D 6666 -suser socks_user -spwd socks_pwd -server root@1.2.3.4 -p 22 -P server_pwd
-```
