@@ -25,7 +25,6 @@
 			<version>${lombok.version}</version>
 			<scope>provided</scope>
 		</dependency>
-		<!-- 原 com.jcraft:jsch 自 0.1.55 后停止维护，切换到社区维护分支，包名仍为 com.jcraft.jsch -->
 		<dependency>
 			<groupId>com.github.mwiede</groupId>
 			<artifactId>jsch</artifactId>
