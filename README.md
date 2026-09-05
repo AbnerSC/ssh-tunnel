@@ -9,7 +9,7 @@
 ### JDK 25
 
 ### 依赖
-- [com.github.mwiede:jsch](https://github.com/mwiede/jsch) 2.28.7
+- [org.apache.sshd:sshd-core](https://github.com/apache/mina-sshd) 2.19.0
 - [io.vertx:vertx-core](https://vertx.io/) 5.1.7
 - [org.projectlombok:lombok](https://projectlombok.org/) 1.18.46
 
@@ -23,7 +23,7 @@
 - `-server root@1.2.3.4`：作为隧道的服务器地址和账号
 - `-p 22`：服务器SSH端口
 - `-P "server_pwd"`：服务器SSH密码
-- `-pool 5`：SSH连接池大小【可选参数，默认5】
+- `-pool 8`：SSH连接池大小【可选参数，默认8】
 
 > 说明：`-D` 与 `-H` 可同时启用，两者共用同一套账号密码与同一个 SSH 连接池。
 > 配置账号密码后，http 代理采用 `Proxy-Authorization: Basic` 认证；未配置则无需认证。
@@ -61,7 +61,7 @@ services:
 | `SSH_SERVER` | `-server` | 隧道服务器地址与账号，如 `root@1.2.3.4` |
 | `SSH_PORT` | `-p` | 服务器SSH端口 |
 | `SSH_PASSWORD` | `-P` | 服务器SSH密码 |
-| `SSH_POOL` | `-pool` | SSH连接池大小（默认5） |
+| `SSH_POOL` | `-pool` | SSH连接池大小（默认8） |
 | `JAVA_OPTS` | - | 覆盖镜像内置的 JVM 调优参数 |
 
 ### 使用测试

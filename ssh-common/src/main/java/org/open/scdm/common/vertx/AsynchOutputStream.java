@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.OutputStream;
 
 import org.open.scdm.common.ssh.Logf;
-import com.jcraft.jsch.ChannelDirectTCPIP;
 
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
@@ -19,7 +18,7 @@ public class AsynchOutputStream extends OutputStream {
 
 	private final Integer port;
 
-	public AsynchOutputStream(String host, Integer port, NetSocket socket, ChannelDirectTCPIP channel) {
+	public AsynchOutputStream(String host, Integer port, NetSocket socket) {
 		this.host = host;
 		this.port = port;
 		this.socket = socket;
@@ -34,9 +33,9 @@ public class AsynchOutputStream extends OutputStream {
 			close();
 			return;
 		}
-		byte[] body = new byte[len];
-		System.arraycopy(bytes, off, body, 0, len);
-		this.socket.write(Buffer.buffer(body));
+		// appendBytes(bytes, off, len) 直接按区间拷入 Buffer 内部缓冲，
+		// 免去原先 new byte[len] + arraycopy 的整段中间拷贝
+		this.socket.write(Buffer.buffer().appendBytes(bytes, off, len));
 	}
 
 	public void close() throws IOException {

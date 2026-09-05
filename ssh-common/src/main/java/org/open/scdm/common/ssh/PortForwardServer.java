@@ -6,8 +6,7 @@ import java.util.function.Supplier;
 import lombok.Setter;
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.vertx.VertxUtil;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 import io.vertx.core.Vertx;
 import io.vertx.core.net.NetServerOptions;
@@ -22,7 +21,7 @@ public class PortForwardServer {
 	 * 
 	 */
 	@Setter
-    private Supplier<Session> sshSupplier;
+    private Supplier<ClientSession> sshSupplier;
 
 	/**
 	 * 端口
@@ -56,13 +55,13 @@ public class PortForwardServer {
 	}
 
 	private void connect(NetSocket socket) {
-		Session session = sshSupplier == null ? null : sshSupplier.get();
-		if (session != null && session.isConnected()) {
+		ClientSession session = sshSupplier == null ? null : sshSupplier.get();
+		if (session != null && !session.isClosed()) {
 			try {
 				ChannelUtils.openChannel(copyItem.getHost(), copyItem.getPort(), session, socket);
 				socket.resume();
 				return;
-			} catch (JSchException | IOException e) {
+			} catch (IOException e) {
 				e.printStackTrace();
 			}
 		}

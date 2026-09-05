@@ -93,7 +93,9 @@ public class SSHCopyConfig {
 		}
 		if (StrUtil.isNotEmpty(serverHost)) {
 			this.sshConfig = new SSHConfig(serverHost, serverUserName, serverPassword, serverPort,
-					format.getInteger("-pool", 5));
+					// 默认 8：多 Session 把通道负载分散到多条 TCP 连接，缓解队头阻塞；
+				// 且低于 OpenSSH MaxStartups(10)阈值，避免启动时并发认证被随机丢弃
+					format.getInteger("-pool", 8));
 			sshConfig.setRemotes(remotes);
 			sshConfig.setLocals(locals);
 		}

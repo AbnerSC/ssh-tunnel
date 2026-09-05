@@ -7,7 +7,7 @@ import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.SSHConfig;
 import org.open.scdm.common.dispatcher.ABSDispatcher;
 import org.open.scdm.common.vertx.VertxUtil;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 public class SSHClientPool extends ABSDispatcher {
 	/**
@@ -93,7 +93,7 @@ public class SSHClientPool extends ABSDispatcher {
 		}
 	}
 
-	public Session trySession() {
+	public ClientSession trySession() {
 		int size = poolSize;
 		// 无锁轮询：从上次位置的下一个开始，找到一个已连接的 Session。
 		// floorMod 保证 getAndIncrement 溢出为负数时仍能得到合法下标。

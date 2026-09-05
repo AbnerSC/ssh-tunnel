@@ -5,12 +5,13 @@ import java.io.OutputStream;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.open.scdm.common.vertx.AsynchOutputStream;
-import com.jcraft.jsch.ChannelDirectTCPIP;
-import com.jcraft.jsch.JSchException;
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.channel.ChannelDirectTcpip;
+import org.apache.sshd.client.session.ClientSession;
+import org.apache.sshd.common.util.net.SshdSocketAddress;
 
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
@@ -20,6 +21,12 @@ import io.vertx.core.net.SocketAddress;
  * 通道工具
  */
 public class ChannelUtils {
+	/**
+	 * 通道建立超时(ms)：服务端需先完成到目标主机的 TCP 连接才回 OPEN_CONFIRMATION，
+	 * 高 RTT 链路(客户端→SSH 服务器 + 服务器→目标 两段往返)下 1s 容易误判失败
+	 */
+	private static final long CHANNEL_CONNECT_TIMEOUT = 10000;
+
 	/**
 	 * 拼接
 	 * 
@@ -40,8 +47,8 @@ public class ChannelUtils {
 		return Buffer.buffer(res);
 	}
 
-	public static void openChannel(String host, Integer port, Session session, NetSocket socket)
-			throws JSchException, IOException {
+	public static void openChannel(String host, Integer port, ClientSession session, NetSocket socket)
+			throws IOException {
 		openChannel(host, port, session, socket, null);
 	}
 
@@ -51,31 +58,30 @@ public class ChannelUtils {
 	 * @param initialToTarget 通道连通后先写给目标的字节（如 http 代理改写后的请求报文）；可为 null。
 	 *                        在 socket.handler 装配之前同步写入，保证先于后续客户端数据到达目标。
 	 */
-	public static void openChannel(String host, Integer port, Session session, NetSocket socket,
-			byte[] initialToTarget) throws JSchException, IOException {
-//		ChannelDirectTCPIP targetChannel = (ChannelDirectTCPIP) session.getStreamForwarder(host, port.intValue());
-		ChannelDirectTCPIP targetChannel=(ChannelDirectTCPIP) session.openChannel("direct-tcpip");
-		targetChannel.setHost(host);
-		targetChannel.setPort(port.intValue());
-		SocketAddress address = socket.remoteAddress();
-		targetChannel.setOrgIPAddress(address.host());
-		targetChannel.setOrgPort(address.port());
-		targetChannel.setOutputStream((OutputStream) new AsynchOutputStream(host, port, socket, targetChannel));
-		targetChannel.connect(1000);
-		if (!targetChannel.isConnected()) {
-			throw new RuntimeException("连接失败");
-		}
-		OutputStream stream = targetChannel.getOutputStream();
+	public static void openChannel(String host, Integer port, ClientSession session, NetSocket socket,
+			byte[] initialToTarget) throws IOException {
+		// originator 取代理客户端侧地址，与 ssh direct-tcpip 协议语义一致
+		SocketAddress origin = socket.remoteAddress();
+		ChannelDirectTcpip targetChannel = session.createDirectTcpipChannel(
+				new SshdSocketAddress(origin.host(), origin.port()),
+				new SshdSocketAddress(host, port.intValue()));
+		// 远端数据由 MINA 会话线程直接推给该流（内部为 Vert.x 异步写，不阻塞 IO 线程）；
+		// 通道关闭时 MINA 会 close 该流，进而在 AsynchOutputStream 中关闭本地 socket
+		targetChannel.setOut(new AsynchOutputStream(host, port, socket));
+		// 通道打开确认即代表远端 TCP 已连通；失败/超时由 verify 抛出异常
+		targetChannel.open().verify(CHANNEL_CONNECT_TIMEOUT, TimeUnit.MILLISECONDS);
+		// 本地→远端：阻塞写，遵守远端流控窗口
+		OutputStream stream = targetChannel.getInvertedIn();
 		// http 代理普通转发：通道连通后先把改写后的请求写给目标。
 		// 此时 socket.handler 尚未装配，客户端数据不会插队，写入顺序有保证。
 		if (initialToTarget != null && initialToTarget.length > 0) {
 			stream.write(initialToTarget);
 			stream.flush();
 		}
-		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复 disconnect
+		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复关闭通道
 		AtomicBoolean closed = new AtomicBoolean(false);
 		// per-connection 单虚拟线程串行执行器：
-		// JSch 的 stream.write 是阻塞写（等待 SSH 通道窗口），若直接在 socket.handler（event loop 线程）
+		// getInvertedIn().write 是阻塞写（等待 SSH 通道窗口），若直接在 socket.handler（event loop 线程）
 		// 中执行，远端慢时会阻塞整个 event loop，拖垮同线程上所有连接。
 		// 改用每连接一个虚拟线程串行消费，既保证 TCP 字节流顺序，又不阻塞 event loop。
 		ExecutorService writer = Executors.newSingleThreadExecutor(
@@ -85,7 +91,7 @@ public class ChannelUtils {
 				return;
 			}
 			writer.shutdownNow();
-			targetChannel.disconnect();
+			targetChannel.close(true);
 			Logf.log("连接%s已断开，同时关闭%s:%s", socket.remoteAddress(), host, port);
 		};
 		socket.handler(buf -> {

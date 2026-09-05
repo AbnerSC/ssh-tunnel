@@ -6,7 +6,7 @@ import org.open.scdm.common.ssh.SSHClientPool;
 import org.open.scdm.common.vertx.VertxUtil;
 import org.open.scdm.http.server.HttpProxyClientConsumer;
 
-import com.jcraft.jsch.Session;
+import org.apache.sshd.client.session.ClientSession;
 
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetSocket;
@@ -30,8 +30,9 @@ public class SSHHttpProxyClient implements HttpProxyClientConsumer {
 	@Override
 	public void handle(String host, int port, byte[] initialToTarget, byte[] replyToClient, byte[] failReplyToClient,
 			NetSocket socket) {
-		Session session = clientPool.trySession();
-		if (session != null && session.isConnected()) {
+		ClientSession session = clientPool.trySession();
+		// trySession 只会返回健康会话(isClosed/isClosing 均为 false)，无需再校验连接状态
+		if (session != null) {
 			socket.pause();
 			VertxUtil.current().pushTask(() -> {
 				try {
