@@ -60,8 +60,9 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
 
 # 运行时环境变量（均可选，未设置或为空则不传对应参数；详见 README）：
 #   SOCKS_PORT     -> -D      本地 socks5 监听端口
-#   SOCKS_USER     -> -suser  socks5 代理账号
-#   SOCKS_PASSWORD -> -spwd   socks5 代理密码
+#   SOCKS_USER     -> -suser  socks5/http 代理账号
+#   SOCKS_PASSWORD -> -spwd   socks5/http 代理密码
+#   HTTP_PORT      -> -H      本地 http 代理监听端口（认证复用 SOCKS_USER/SOCKS_PASSWORD）
 #   SSH_SERVER     -> -server 隧道服务器地址与账号，如 root@1.2.3.4
 #   SSH_PORT       -> -p      服务器 SSH 端口
 #   SSH_PASSWORD   -> -P      服务器 SSH 密码
@@ -70,6 +71,7 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
 ENV SOCKS_PORT= \
     SOCKS_USER= \
     SOCKS_PASSWORD= \
+    HTTP_PORT= \
     SSH_SERVER= \
     SSH_PORT= \
     SSH_PASSWORD= \

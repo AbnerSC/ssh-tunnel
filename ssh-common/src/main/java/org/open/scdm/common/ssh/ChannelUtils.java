@@ -42,6 +42,17 @@ public class ChannelUtils {
 
 	public static void openChannel(String host, Integer port, Session session, NetSocket socket)
 			throws JSchException, IOException {
+		openChannel(host, port, session, socket, null);
+	}
+
+	/**
+	 * 打开 direct-tcpip 通道并双向转发。
+	 *
+	 * @param initialToTarget 通道连通后先写给目标的字节（如 http 代理改写后的请求报文）；可为 null。
+	 *                        在 socket.handler 装配之前同步写入，保证先于后续客户端数据到达目标。
+	 */
+	public static void openChannel(String host, Integer port, Session session, NetSocket socket,
+			byte[] initialToTarget) throws JSchException, IOException {
 //		ChannelDirectTCPIP targetChannel = (ChannelDirectTCPIP) session.getStreamForwarder(host, port.intValue());
 		ChannelDirectTCPIP targetChannel=(ChannelDirectTCPIP) session.openChannel("direct-tcpip");
 		targetChannel.setHost(host);
@@ -55,6 +66,12 @@ public class ChannelUtils {
 			throw new RuntimeException("连接失败");
 		}
 		OutputStream stream = targetChannel.getOutputStream();
+		// http 代理普通转发：通道连通后先把改写后的请求写给目标。
+		// 此时 socket.handler 尚未装配，客户端数据不会插队，写入顺序有保证。
+		if (initialToTarget != null && initialToTarget.length > 0) {
+			stream.write(initialToTarget);
+			stream.flush();
+		}
 		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复 disconnect
 		AtomicBoolean closed = new AtomicBoolean(false);
 		// per-connection 单虚拟线程串行执行器：

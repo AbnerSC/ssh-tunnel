@@ -5,6 +5,10 @@ import org.open.scdm.common.config.ParamFormat;
 import org.open.scdm.common.config.SSHConfig;
 import org.open.scdm.common.ssh.Logf;
 import org.open.scdm.common.ssh.SSHClientPool;
+import org.open.scdm.http.client.local.LocalHttpProxyClient;
+import org.open.scdm.http.client.ssh.SSHHttpProxyClient;
+import org.open.scdm.http.server.HttpProxyClientConsumer;
+import org.open.scdm.http.server.VertxHttpProxyServer;
 import org.open.scdm.socks5.client.local.LocalSocks5Client;
 import org.open.scdm.socks5.client.ssh.SSHSocks5Client;
 import org.open.scdm.socks5.server.Socks5ClientConsumer;
@@ -27,17 +31,21 @@ public class SSHCopyApp {
 			System.exit(0);
 			return;
 		}
-		Socks5ClientConsumer socks5Client;
+		// socks5 与 http 代理共用同一个 SSH 连接池（若配置了服务器），否则均走本地直连
+		SSHClientPool client = null;
 		if (config.getSshConfig() != null) {
-			SSHClientPool client = new SSHClientPool(config.getSshConfig());
+			client = new SSHClientPool(config.getSshConfig());
 			client.start();
-			socks5Client = new SSHSocks5Client(client);
-		} else {
-			socks5Client = new LocalSocks5Client();
 		}
+		Socks5ClientConsumer socks5Client = client != null ? new SSHSocks5Client(client) : new LocalSocks5Client();
+		HttpProxyClientConsumer httpClient = client != null ? new SSHHttpProxyClient(client) : new LocalHttpProxyClient();
 		if (config.getSocksPort() > 0) {
 			new VertxSocks5Server(config.getSocksUserName(), config.getSocksPassword(), socks5Client)
 					.start(config.getSocksPort());
+		}
+		if (config.getHttpPort() > 0) {
+			new VertxHttpProxyServer(config.getSocksUserName(), config.getSocksPassword(), httpClient)
+					.start(config.getHttpPort());
 		}
 	}
 

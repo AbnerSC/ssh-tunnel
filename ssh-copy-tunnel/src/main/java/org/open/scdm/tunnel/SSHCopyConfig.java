@@ -32,6 +32,10 @@ public class SSHCopyConfig {
 	 */
 	private Integer socksPort;
 	/**
+	 * http代理监听端口(-H)，与 socks5 复用同一套账号密码认证
+	 */
+	private Integer httpPort;
+	/**
 	 * ssh配置
 	 */
 	private SSHConfig sshConfig;
@@ -52,16 +56,25 @@ public class SSHCopyConfig {
 		String serverPassword = format.getValue("-P", null);
 		// 服务器地址
 		this.socksPort = format.containsKey("-D") ? Integer.parseInt(format.getValue("-D", null)) : -1;
+		this.httpPort = format.containsKey("-H") ? Integer.parseInt(format.getValue("-H", null)) : -1;
 		this.socksUserName = format.getValue("-suser", null);
 		this.socksPassword = format.getValue("-spwd", null);
 		// 如果数据没有，就从控制台读取
 		MyConsoleCollect console = MyConsoleCollect.createConsoleCollect();
 		socksPort = socksPort == null ? -1 : socksPort;
+		httpPort = httpPort == null ? -1 : httpPort;
 		if (socksPort != -1) {
 			if (StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
 				System.out.println("socks5认证用户:" + socksUserName + ",认证密码:******");
 			} else {
 				System.out.println("socks5无授权认证");
+			}
+		}
+		if (httpPort > 0) {
+			if (StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
+				System.out.println("http代理认证用户:" + socksUserName + ",认证密码:******");
+			} else {
+				System.out.println("http代理无授权认证");
 			}
 		}
 		List<CopyItem> locals = readScript(format, "-s", "-L");
@@ -75,7 +88,7 @@ public class SSHCopyConfig {
 			System.out.println(String.format("用户名:%s,地址:%s,端口:%s", serverUserName, serverHost, serverPort));
 		}
 		serverPassword = getPassword(serverPassword);
-		if (socksPort > 0 && StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
+		if ((socksPort > 0 || httpPort > 0) && StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
 			socksPassword = getPassword(socksPassword);
 		}
 		if (StrUtil.isNotEmpty(serverHost)) {
@@ -113,7 +126,7 @@ public class SSHCopyConfig {
 	}
 
 	public boolean checkWork() {
-		if (socksPort > 0) {
+		if (socksPort > 0 || httpPort > 0) {
 			return true;
 		}
 		if (sshConfig != null) {

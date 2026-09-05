@@ -9,8 +9,9 @@
 #
 # 支持的环境变量（均可选，未设置或为空则不传对应参数）：
 #   SOCKS_PORT      -> -D      本地 socks5 监听端口
-#   SOCKS_USER      -> -suser  socks5 代理账号
-#   SOCKS_PASSWORD  -> -spwd   socks5 代理密码
+#   SOCKS_USER      -> -suser  socks5/http 代理账号
+#   SOCKS_PASSWORD  -> -spwd   socks5/http 代理密码
+#   HTTP_PORT       -> -H      本地 http 代理监听端口（认证复用 SOCKS_USER/SOCKS_PASSWORD）
 #   SSH_SERVER      -> -server 隧道服务器地址与账号，如 root@1.2.3.4
 #   SSH_PORT        -> -p      服务器 SSH 端口
 #   SSH_PASSWORD    -> -P      服务器 SSH 密码
@@ -37,6 +38,7 @@ add_arg() {
 add_arg "${SOCKS_PORT:-}"     "-D"
 add_arg "${SOCKS_USER:-}"     "-suser"
 add_arg "${SOCKS_PASSWORD:-}" "-spwd"
+add_arg "${HTTP_PORT:-}"      "-H"
 add_arg "${SSH_SERVER:-}"     "-server"
 add_arg "${SSH_PORT:-}"       "-p"
 add_arg "${SSH_PASSWORD:-}"   "-P"
