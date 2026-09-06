@@ -36,6 +36,7 @@ services:
     container_name: ssh-tunnel
     hostname: linux
     environment:
+      - TZ=Asia/Shanghai
       - SOCKS_PORT=6666
       - HTTP_PORT=6667
       - SOCKS_USER=socks_user
