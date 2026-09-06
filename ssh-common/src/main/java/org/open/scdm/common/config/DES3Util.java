@@ -12,23 +12,21 @@ import javax.crypto.spec.IvParameterSpec;
 public class DES3Util {
     private final static String I_V = "01234567";
 
-    private static String getScretKey(String secretKey) {
+    private static String getSecretKey(String secretKey) {
         StringBuilder buf = new StringBuilder(secretKey);
-        int lenght = buf.length();
-        if (lenght < 24) {
-            int cLenght = 24 - lenght;
-            for (int i = 0; i < cLenght; i++) {
-                buf.append("0");
-            }
+        int length = buf.length();
+        if (length < 24) {
+            int cLength = 24 - length;
+            buf.repeat("0", Math.max(0, cLength));
         }
         return buf.toString();
     }
 
     public static String encode(String plainText, String secretKey) {
         try {
-            DESedeKeySpec spec = new DESedeKeySpec(getScretKey(secretKey).getBytes(StandardCharsets.UTF_8));
-            SecretKeyFactory keyfactory = SecretKeyFactory.getInstance("desede");
-            Key deskey = keyfactory.generateSecret(spec);
+            DESedeKeySpec spec = new DESedeKeySpec(getSecretKey(secretKey).getBytes(StandardCharsets.UTF_8));
+            SecretKeyFactory factory = SecretKeyFactory.getInstance("desede");
+            Key deskey = factory.generateSecret(spec);
 
             Cipher cipher = Cipher.getInstance("desede/CBC/PKCS5Padding");
             IvParameterSpec ips = new IvParameterSpec(I_V.getBytes(StandardCharsets.UTF_8));
@@ -42,7 +40,7 @@ public class DES3Util {
 
     public static String decode(String encryptText, String secretKey) {
         try {
-            DESedeKeySpec spec = new DESedeKeySpec(getScretKey(secretKey).getBytes(StandardCharsets.UTF_8));
+            DESedeKeySpec spec = new DESedeKeySpec(getSecretKey(secretKey).getBytes(StandardCharsets.UTF_8));
             SecretKeyFactory keyfactory = SecretKeyFactory.getInstance("desede");
             Key deskey = keyfactory.generateSecret(spec);
             Cipher cipher = Cipher.getInstance("desede/CBC/PKCS5Padding");

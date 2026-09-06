@@ -5,18 +5,11 @@ import java.util.Scanner;
 
 import org.open.scdm.common.config.StrUtil;
 
-/**
- * @Title: MyConsoleCollect.java
- * @Description: 控制台信息收集
- * @package priv.dm.console
- * @Author: 方明
- * @Date: 2021年3月4日 上午9:52:27
- */
 public abstract class MyConsoleCollect {
 	protected MyConsoleCollect() {
 	}
 
-	public static final MyConsoleCollect createConsoleCollect() {
+	public static MyConsoleCollect createConsoleCollect() {
 		Console console = System.console();
 		// JDK 22(JDK-8308591) 起，即使标准流被重定向 System.console() 也会返回非 null，
 		// 必须用 isTerminal() 判断是否真的连接在终端上
@@ -68,13 +61,6 @@ public abstract class MyConsoleCollect {
 
 	protected abstract String readLineString(String tips, boolean hide);
 
-	/**
-	 * @Title: SystemConsoleCollect.java
-	 * @Description: 系统读取实现
-	 * @package priv.dm.console
-	 * @Author: 方明
-	 * @Date: 2021年3月4日 上午10:07:18
-	 */
 	static class SystemConsoleCollect extends MyConsoleCollect {
 		private final Console console;
 
@@ -94,13 +80,6 @@ public abstract class MyConsoleCollect {
 
 	}
 
-	/**
-	 * @Title: ScannerConsoleCollect.java
-	 * @Description: 直接读取控制台实现
-	 * @package priv.dm.console
-	 * @Author: 方明
-	 * @Date: 2021年3月4日 上午10:04:49
-	 */
 	static class ScannerConsoleCollect extends MyConsoleCollect {
 		private final Scanner scanner;
 

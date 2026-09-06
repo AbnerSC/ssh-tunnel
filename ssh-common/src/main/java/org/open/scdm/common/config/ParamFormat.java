@@ -6,11 +6,9 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * @Title: ParamFormat.java
- * @Description: 参数格式化
- * @package priv.dm.common
- * @Author: 方明
- * @Date: 2020年9月21日 下午5:58:02
+ * &#064;Title:  ParamFormat.java
+ * &#064;Description:  参数格式化
+ * &#064;Date:  2020年9月21日 下午5:58:02
  */
 public class ParamFormat {
 	private final Map<String, LinkedList<String>> param = new TreeMap<>();
@@ -80,8 +78,8 @@ public class ParamFormat {
 
 	private String getValueAsString(String key) {
 		List<String> list = param.get(key);
-		if (list != null) {
-			return list.get(0);
+		if (list != null && !list.isEmpty()) {
+			return list.getFirst();
 		}
 		return null;
 	}
