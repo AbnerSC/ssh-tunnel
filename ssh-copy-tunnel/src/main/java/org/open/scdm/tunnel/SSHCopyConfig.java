@@ -11,6 +11,7 @@ import org.open.scdm.common.config.ParamFormat;
 import org.open.scdm.common.config.SSHConfig;
 import org.open.scdm.common.config.StrUtil;
 import org.open.scdm.common.console.MyConsoleCollect;
+import org.open.scdm.common.ssh.Logf;
 
 import lombok.Data;
 
@@ -61,31 +62,27 @@ public class SSHCopyConfig {
 		this.socksPassword = format.getValue("-spwd", null);
 		// 如果数据没有，就从控制台读取
 		MyConsoleCollect console = MyConsoleCollect.createConsoleCollect();
-		socksPort = socksPort == null ? -1 : socksPort;
-		httpPort = httpPort == null ? -1 : httpPort;
 		if (socksPort != -1) {
 			if (StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
-				System.out.println("socks5认证用户:" + socksUserName + ",认证密码:******");
+				Logf.printf("socks5认证用户:%s,认证密码:******", socksUserName);
 			} else {
-				System.out.println("socks5无授权认证");
+				Logf.printf("socks5无授权认证");
 			}
 		}
 		if (httpPort > 0) {
 			if (StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
-				System.out.println("http代理认证用户:" + socksUserName + ",认证密码:******");
+				Logf.printf("http代理认证用户:%s,认证密码:******", socksUserName);
 			} else {
-				System.out.println("http代理无授权认证");
+				Logf.printf("http代理无授权认证");
 			}
 		}
 		List<CopyItem> locals = readScript(format, "-s", "-L");
 		List<CopyItem> remotes = readScript(format, "-R");
-		remotes = remotes == null ? new ArrayList<>(0) : remotes;
-		locals = locals == null ? new ArrayList<>(0) : locals;
-		if (locals.size() > 0 || remotes.size() > 0 || (StrUtil.isNotEmpty(serverHost))) {
+		if (!locals.isEmpty() || !remotes.isEmpty() || (StrUtil.isNotEmpty(serverHost))) {
 			serverHost = console.readConsole("请输入服务器地址:", serverHost, false);
 			serverUserName = console.readConsole("请输入服务器账号:", serverUserName, false);
 			serverPassword = console.readConsole("请输入服务器密码:", serverPassword, true);
-			System.out.println(String.format("用户名:%s,地址:%s,端口:%s", serverUserName, serverHost, serverPort));
+			Logf.printf("用户名:%s,地址:%s,端口:%s", serverUserName, serverHost, serverPort);
 		}
 		serverPassword = getPassword(serverPassword);
 		if ((socksPort > 0 || httpPort > 0) && StrUtil.isNotEmpty(socksUserName) && StrUtil.isNotEmpty(socksPassword)) {
@@ -106,17 +103,13 @@ public class SSHCopyConfig {
 			for (int i = 0; i < 4; i++) {
 				pwd = DES3Util.decode(pwd, SSHConfig.CYPHER_KEY);
 			}
-		} catch (Exception e) {
+		} catch (Exception _) {
 		}
 		return pwd;
 	}
 
 	/**
 	 * 需要执行的脚本
-	 *
-	 * @param paramFormat
-	 * @param arr
-	 * @return
 	 */
 	private List<CopyItem> readScript(ParamFormat paramFormat, String... arr) {
 		List<CopyItem> res = new ArrayList<>();

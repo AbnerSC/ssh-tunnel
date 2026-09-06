@@ -2,6 +2,7 @@ package org.open.scdm.common.dispatcher;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.open.scdm.common.ssh.Logf;
 import org.open.scdm.common.vertx.VertxUtil;
 
 public abstract class ABSDispatcher {
@@ -26,7 +27,7 @@ public abstract class ABSDispatcher {
 				VertxUtil.current().pushTask(this::runDispatcher, 500);
 			}
 		} catch (Throwable e) {
-			System.out.println("调度任务发生异常" + e.getMessage());
+			Logf.printf("调度任务发生异常:%s", e.getMessage() == null ? e.toString() : e.getMessage());
 		}
 	}
 

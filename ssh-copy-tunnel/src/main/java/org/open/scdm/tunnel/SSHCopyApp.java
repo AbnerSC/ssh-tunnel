@@ -51,9 +51,6 @@ public class SSHCopyApp {
 
 	/**
 	 * 检查是不是加密
-	 *
-	 * @param format
-	 * @return
 	 */
 	private static boolean checkPassword(ParamFormat format) {
 		String key = "-encode";

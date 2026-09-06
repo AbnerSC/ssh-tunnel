@@ -1,6 +1,7 @@
 package org.open.scdm.socks5.server;
 
 import org.open.scdm.common.config.StrUtil;
+import org.open.scdm.common.ssh.Logf;
 import org.open.scdm.common.vertx.VertxUtil;
 
 import io.vertx.core.Vertx;
@@ -49,14 +50,12 @@ public class VertxSocks5Server {
 				.connectHandler(c -> new VertxSocks5Impl(auth, userName, password, clientConsumer, c))
 				// 监听
 				.listen(port).onComplete(res -> {
-					System.out.print("socks5服务启动");
 					if (res.succeeded()) {
-						System.out.print("成功");
+						Logf.printf("socks5服务启动成功端口:%d", port);
 					} else {
 						netServer.close();
-						System.out.print("失败");
+						Logf.printf("socks5服务启动失败端口:%d", port);
 					}
-					System.out.println("端口:" + port);
 				});
 	}
 

@@ -14,11 +14,30 @@
 		<lombok.version>1.18.46</lombok.version>
 		<mina-sshd.version>2.19.0</mina-sshd.version>
 		<logback.version>1.6.3</logback.version>
+		<slf4j.version>2.0.18</slf4j.version>
 		<vertx.version>5.1.7</vertx.version>
 
 		<maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
 	</properties>
+	<dependencyManagement>
+		<dependencies>
+			<!-- sshd-core 2.19 传递依赖 slf4j-api/jcl-over-slf4j 1.7.36，
+			     按“最近优先”压过 logback 所需的 slf4j-api 2.x，导致运行时
+			     报 StaticLoggerBinder 缺失并回退 NOP（无任何日志输出）。
+			     统一钉到 slf4j 2.0.x，与 logback-classic 1.6.x 对齐 -->
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>slf4j-api</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.slf4j</groupId>
+				<artifactId>jcl-over-slf4j</artifactId>
+				<version>${slf4j.version}</version>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<dependencies>
 		<dependency>
 			<groupId>org.projectlombok</groupId>

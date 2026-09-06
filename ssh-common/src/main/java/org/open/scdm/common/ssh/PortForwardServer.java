@@ -62,7 +62,7 @@ public class PortForwardServer {
 				socket.resume();
 				return;
 			} catch (IOException e) {
-				e.printStackTrace();
+				Logf.printf("本地转发打开通道失败:%s", e);
 			}
 		}
 		socket.close();

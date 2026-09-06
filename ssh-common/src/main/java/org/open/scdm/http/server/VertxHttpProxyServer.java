@@ -1,6 +1,7 @@
 package org.open.scdm.http.server;
 
 import org.open.scdm.common.config.StrUtil;
+import org.open.scdm.common.ssh.Logf;
 import org.open.scdm.common.vertx.VertxUtil;
 
 import io.vertx.core.Vertx;
@@ -48,14 +49,12 @@ public class VertxHttpProxyServer {
 				.connectHandler(c -> new VertxHttpProxyImpl(auth, userName, password, clientConsumer, c))
 				// 监听
 				.listen(port).onComplete(res -> {
-					System.out.print("http代理服务启动");
 					if (res.succeeded()) {
-						System.out.print("成功");
+						Logf.printf("http代理服务启动成功端口:%d", port);
 					} else {
 						netServer.close();
-						System.out.print("失败");
+						Logf.printf("http代理服务启动失败端口:%d", port);
 					}
-					System.out.println("端口:" + port);
 				});
 	}
 
