@@ -13,7 +13,7 @@
 
 		<lombok.version>1.18.46</lombok.version>
 		<mina-sshd.version>2.19.0</mina-sshd.version>
-		<slf4j.version>2.0.17</slf4j.version>
+		<logback.version>1.6.3</logback.version>
 		<vertx.version>5.1.7</vertx.version>
 
 		<maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
@@ -32,11 +32,12 @@
 			<artifactId>sshd-core</artifactId>
 			<version>${mina-sshd.version}</version>
 		</dependency>
-		<!-- sshd 强依赖 slf4j；选 nop 保持与原 JSch 版本一致的静默输出 -->
+		<!-- sshd 强依赖 slf4j；改用 logback 实现：控制台 + logs/ 文件双输出，
+		     按天滚动、保留 30 天，配置见 ssh-common 的 logback.xml -->
 		<dependency>
-			<groupId>org.slf4j</groupId>
-			<artifactId>slf4j-nop</artifactId>
-			<version>${slf4j.version}</version>
+			<groupId>ch.qos.logback</groupId>
+			<artifactId>logback-classic</artifactId>
+			<version>${logback.version}</version>
 		</dependency>
 		<dependency>
 			<groupId>io.vertx</groupId>

@@ -47,6 +47,8 @@ services:
     ports:
       - 16666:6666
       - 16667:6667
+    volumes:
+      - ./logs:/app/logs
     mem_limit: 256m
 ```
 
