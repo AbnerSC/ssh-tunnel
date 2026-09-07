@@ -62,19 +62,19 @@ services:
 
 - 环境变量说明：
 
-| 环境变量         | 对应参数  | 说明                                                                          |
-|------------------|-----------|-------------------------------------------------------------------------------|
-| `SOCKS_PORT`     | `-D`      | 本地socks5监听端口                                                            |
-| `HTTP_PORT`      | `-H`      | 本地http代理监听端口                                                          |
-| `SOCKS_USER`     | `-suser`  | 代理账号，socks5 与 http 代理共用（可选）                                     |
-| `SOCKS_PASSWORD` | `-spwd`   | 代理密码，socks5 与 http 代理共用（可选）                                     |
-| `SSH_SERVER`     | `-server` | 隧道服务器地址与账号，如 `root@1.2.3.4`（可选）当为空时，默认本机直接提供代理 |
-| `SSH_PORT`       | `-p`      | 服务器SSH端口（可选）,跟随`SSH_SERVER`一起配置                                |
-| `SSH_PASSWORD`   | `-P`      | 服务器SSH密码（可选）,跟随`SSH_SERVER`一起配置                                |
-| `SSH_POOL`       | `-pool`   | SSH 连接池大小（可选），建议不配置，默认配置已最优                            |
-| `DIRECT_IP`      | `-direct-ip` | 直连IP/网段（逗号或空格分隔多个值，可选）                                     |
+| 环境变量         | 对应参数         | 说明                                                                          |
+|------------------|------------------|-------------------------------------------------------------------------------|
+| `SOCKS_PORT`     | `-D`             | 本地socks5监听端口                                                            |
+| `HTTP_PORT`      | `-H`             | 本地http代理监听端口                                                          |
+| `SOCKS_USER`     | `-suser`         | 代理账号，socks5 与 http 代理共用（可选）                                     |
+| `SOCKS_PASSWORD` | `-spwd`          | 代理密码，socks5 与 http 代理共用（可选）                                     |
+| `SSH_SERVER`     | `-server`        | 隧道服务器地址与账号，如 `root@1.2.3.4`（可选）当为空时，默认本机直接提供代理 |
+| `SSH_PORT`       | `-p`             | 服务器SSH端口（可选）,跟随`SSH_SERVER`一起配置                                |
+| `SSH_PASSWORD`   | `-P`             | 服务器SSH密码（可选）,跟随`SSH_SERVER`一起配置                                |
+| `SSH_POOL`       | `-pool`          | SSH 连接池大小（可选），建议不配置，默认配置已最优                            |
+| `DIRECT_IP`      | `-direct-ip`     | 直连IP/网段（逗号或空格分隔多个值，可选）                                     |
 | `DIRECT_DOMAIN`  | `-direct-domain` | 直连域名，匹配主域名（逗号或空格分隔，可选）                                  |
-| `JAVA_OPTS`      | -         | 覆盖镜像内置的 JVM 调优参数（可选）                                           |
+| `JAVA_OPTS`      | -                | 覆盖镜像内置的 JVM 调优参数（可选）                                           |
 
 ### 使用测试
 
