@@ -31,7 +31,7 @@ class LocalSocks5ClientImpl {
 					pipe(usedSocket, target);
 				});
 			} else {
-				Logf.log("无法连接请求 %s:%d", host, port);
+				Logf.log("无法连接请求 %s:%d,%s", host, port, res.cause());
 				usedSocket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x03 }, hostBytes));
 			}
 		});

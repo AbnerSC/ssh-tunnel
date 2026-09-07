@@ -36,7 +36,7 @@ class LocalHttpProxyClientImpl {
 					startPipe(target, usedSocket);
 				}
 			} else {
-				Logf.log("http代理无法连接请求 %s:%d", host, port);
+				Logf.log("http代理无法连接请求 %s:%d,%s", host, port, res.cause());
 				if (failReplyToClient != null && failReplyToClient.length > 0) {
 					usedSocket.write(Buffer.buffer(failReplyToClient)).onComplete((w) -> usedSocket.close());
 				} else {

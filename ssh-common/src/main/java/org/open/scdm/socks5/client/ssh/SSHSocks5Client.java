@@ -36,7 +36,8 @@ public class SSHSocks5Client implements Socks5ClientConsumer {
 					socket.resume();
 					socket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x00 }, hostBytes));
 				} catch (Exception e) {
-					Logf.log("无法连接请求 %s:%d", host, port);
+					// %s 打印 e.toString()：超时为 TimeoutException，服务端拒绝为 SshChannelOpenException(带 reason)，可据此区分故障
+					Logf.log("无法连接请求 %s:%d,%s", host, port, e);
 					socket.resume();
 					// 关闭
 					socket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x03 }, hostBytes));

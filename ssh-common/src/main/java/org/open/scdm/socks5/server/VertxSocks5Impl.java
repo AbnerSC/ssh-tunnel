@@ -71,7 +71,7 @@ class VertxSocks5Impl {
 	 * @param addrtype
 	 */
 	private void requestConnect(String addr, int port, byte[] hostBytes, byte addrtype) {
-		Logf.log("收到代理请求 %s:%d,类型:%s", addr, port, addrtype == 1 ? "ipv4" : "域名");
+		// 请求日志由 onConnectRequest 统一输出，避免同一请求打两遍
 		clientConsumer.handle(addr, port, hostBytes, usedSocket);
 	}
 

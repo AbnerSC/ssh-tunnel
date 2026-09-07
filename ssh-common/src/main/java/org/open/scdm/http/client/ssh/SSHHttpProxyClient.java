@@ -44,7 +44,8 @@ public class SSHHttpProxyClient implements HttpProxyClientConsumer {
 						socket.write(Buffer.buffer(replyToClient));
 					}
 				} catch (Exception e) {
-					Logf.log("http代理无法连接请求 %s:%d", host, port);
+					// 与 socks5 实现一致：输出异常原因以便区分超时/服务端拒绝
+					Logf.log("http代理无法连接请求 %s:%d,%s", host, port, e);
 					socket.resume();
 					fail(socket, failReplyToClient);
 				}
