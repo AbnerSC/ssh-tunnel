@@ -83,6 +83,8 @@ curl -x http://socks_user:socks_pwd@127.0.0.1:6667 https://www.google.com
 - [X] 支持SOCKS5代理
 - [X] 支持HTTP代理
 - [ ] 本机直接提供代理，不通过远程SSH代理
+- [ ] 增加直连IP配置(支持IP和网段)
+- [ ] 增加直连域名配置(支持匹配主域名)
 
 ### 待办
 - [ ] 优化性能，降低内存使用
