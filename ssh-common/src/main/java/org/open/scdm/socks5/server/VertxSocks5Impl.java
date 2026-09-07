@@ -105,8 +105,8 @@ class VertxSocks5Impl {
 		} else {
 			remoteAddr = new String(bytes, 5, addrLen, StandardCharsets.UTF_8);
 		}
-		byte[] hostBytes = new byte[bytes.length - 2];
-		System.arraycopy(bytes, 2, hostBytes, 0, hostBytes.length);
+		// 直接从缓冲区间拷贝（去掉 VER/REP 两字节），免于先整段拷贝再 arraycopy 的双重拷贝
+		byte[] hostBytes = buffer.getBytes(2, buffer.length());
 		Logf.log("收到代理请求 %s:%d,类型:%s", remoteAddr, port, addrtype == 1 ? "ipv4" : "域名");
 		requestConnect(remoteAddr, port, hostBytes, addrtype);
 	}

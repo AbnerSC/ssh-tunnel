@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import org.open.scdm.common.config.CopyItem;
 import org.open.scdm.common.config.DES3Util;
+import org.open.scdm.common.config.DirectRouteConfig;
 import org.open.scdm.common.config.ParamFormat;
 import org.open.scdm.common.config.SSHConfig;
 import org.open.scdm.common.config.StrUtil;
@@ -40,6 +41,10 @@ public class SSHCopyConfig {
 	 * ssh配置
 	 */
 	private SSHConfig sshConfig;
+	/**
+	 * 直连路由配置（-direct-ip / -direct-domain），命中规则的请求由本地直接访问，不经远程SSH代理
+	 */
+	private DirectRouteConfig directRoute;
 
 	public SSHCopyConfig(ParamFormat format) {
 		// 端口
@@ -78,6 +83,15 @@ public class SSHCopyConfig {
 		}
 		List<CopyItem> locals = readScript(format, "-s", "-L");
 		List<CopyItem> remotes = readScript(format, "-R");
+		// 直连路由：-direct-ip 支持单IP与网段(CIDR/点分掩码)，-direct-domain 匹配主域名；
+		// 单个值内可用逗号分隔，也可重复传参累积
+		List<String> directIps = format.getValueList("-direct-ip", new LinkedList<>());
+		List<String> directDomains = format.getValueList("-direct-domain", new LinkedList<>());
+		if (!directIps.isEmpty() || !directDomains.isEmpty()) {
+			this.directRoute = new DirectRouteConfig(directIps, directDomains);
+			Logf.printf("直连IP规则:%d条,直连域名规则:%d条", directRoute.ipRuleCount(),
+					directRoute.domainRuleCount());
+		}
 		if (!locals.isEmpty() || !remotes.isEmpty() || (StrUtil.isNotEmpty(serverHost))) {
 			serverHost = console.readConsole("请输入服务器地址:", serverHost, false);
 			serverUserName = console.readConsole("请输入服务器账号:", serverUserName, false);

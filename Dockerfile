@@ -67,6 +67,8 @@ RUN sed -i 's/\r$//' /usr/local/bin/docker-entrypoint.sh && \
 #   SSH_PORT       -> -p      服务器 SSH 端口
 #   SSH_PASSWORD   -> -P      服务器 SSH 密码
 #   SSH_POOL       -> -pool   SSH 连接池大小（默认 5）
+#   DIRECT_IP      -> -direct-ip   直连 IP/网段（逗号/空格分隔多个值，命中规则不经 SSH 代理）
+#   DIRECT_DOMAIN  -> -direct-domain 直连域名，匹配主域名（逗号/空格分隔多个值）
 #   JAVA_OPTS      -> 覆盖默认 JVM 调优参数
 ENV SOCKS_PORT= \
     SOCKS_USER= \
@@ -76,6 +78,8 @@ ENV SOCKS_PORT= \
     SSH_PORT= \
     SSH_PASSWORD= \
     SSH_POOL= \
+    DIRECT_IP= \
+    DIRECT_DOMAIN= \
     JAVA_OPTS=
 
 ENTRYPOINT ["docker-entrypoint.sh"]

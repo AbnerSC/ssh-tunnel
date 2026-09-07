@@ -38,9 +38,14 @@ class VertxHttpProxyImpl {
 	private final NetSocket usedSocket;
 	private Vertx vertx;
 	/**
-	 * 累积请求头（HTTP 头可能跨多个 TCP 分片到达）
+	 * 累积请求头（HTTP 头可能跨多个 TCP 分片到达）；派发完成后置 null 释放内存，
+	 * 避免长连接（CONNECT 隧道）期间一直持有整个头部字节
 	 */
-	private final Buffer pending = Buffer.buffer();
+	private Buffer pending = Buffer.buffer();
+	/**
+	 * 已扫描过的字节数：\r\n\r\n 可能跨分片，下次从已扫描位置回退 3 字节继续，避免重复扫描
+	 */
+	private int scanned = 0;
 	/**
 	 * 是否已派发，避免同一连接被重复解析
 	 */
@@ -92,6 +97,8 @@ class VertxHttpProxyImpl {
 		}
 		dispatched = true;
 		byte[] all = pending.getBytes();
+		// 头部已提取完毕，释放累积缓冲
+		pending = null;
 		// headerEnd 指向 \r\n\r\n 起始处，头部内容长度为 headerEnd，其后为 body/隧道残留字节
 		byte[] remaining = new byte[all.length - (headerEnd + 4)];
 		System.arraycopy(all, headerEnd + 4, remaining, 0, remaining.length);
@@ -261,18 +268,23 @@ class VertxHttpProxyImpl {
 	}
 
 	/**
-	 * 在累积缓冲中查找头部结束标记 \r\n\r\n 的起始下标，未找到返回 -1
+	 * 在累积缓冲中查找头部结束标记 \r\n\r\n 的起始下标，未找到返回 -1。
+	 * 增量扫描：仅从上次已扫描位置（回退 3 字节）开始，直接经 getByte 读取，
+	 * 不再每个分片都整段拷贝（大头部跨多分片时原实现为 O(n²) 拷贝）。
 	 */
 	private int indexOfHeaderEnd() {
-		byte[] bytes = pending.getBytes();
-		outer: for (int i = 0; i + 3 < bytes.length; i++) {
+		int len = pending.length();
+		int start = Math.max(0, scanned - 3);
+		outer: for (int i = start; i + 3 < len; i++) {
 			for (int j = 0; j < 4; j++) {
-				if (bytes[i + j] != CRLF_CRLF[j]) {
+				if (pending.getByte(i + j) != CRLF_CRLF[j]) {
 					continue outer;
 				}
 			}
+			scanned = len;
 			return i;
 		}
+		scanned = len;
 		return -1;
 	}
 
