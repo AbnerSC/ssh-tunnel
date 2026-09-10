@@ -116,14 +116,27 @@ class VertxSocks5Impl {
 	 */
 	private void onAuth(Buffer buffer) {
 		byte[] bytes = buffer.getBytes();
+		// 报文不完整或版本不符：按认证失败处理，避免数组越界导致连接悬挂
+		if (bytes.length < 4 || bytes[0] != 1) {
+			writeAndClose(new byte[] { 0x01, 0x01 });
+			return;
+		}
 		int index = 1;
-		// 账号
-		byte len = bytes[index];
-		String userName = new String(bytes, ++index, len, StandardCharsets.UTF_8);
-		index += len;
+		// 账号（长度用无符号读取，>127 字节的账号/密码原会因符号截断解析错乱）
+		int ulen = bytes[index] & 0xFF;
+		if (bytes.length < index + 1 + ulen + 1) {
+			writeAndClose(new byte[] { 0x01, 0x01 });
+			return;
+		}
+		String userName = new String(bytes, ++index, ulen, StandardCharsets.UTF_8);
+		index += ulen;
 		// 密码
-		len = bytes[index];
-		String password = new String(bytes, ++index, len, StandardCharsets.UTF_8);
+		int plen = bytes[index] & 0xFF;
+		if (bytes.length < index + 1 + plen) {
+			writeAndClose(new byte[] { 0x01, 0x01 });
+			return;
+		}
+		String password = new String(bytes, ++index, plen, StandardCharsets.UTF_8);
 		Logf.log("收到账号:%s", userName);
 		// 验证账号密码
 		if (this.userName.equals(userName) && this.password.equals(password)) {
@@ -142,26 +155,37 @@ class VertxSocks5Impl {
 	 */
 	private void onAuthPre(Buffer buffer) {
 		checkDelayCloseFun.run();
-		if (buffer.length() > 2) {
-			byte[] bytes = buffer.getBytes();
-			if (bytes[0] != 5) {
-				usedSocket.close();
-				return;
+		if (buffer.length() < 3) {
+			return;
+		}
+		byte[] bytes = buffer.getBytes();
+		if (bytes[0] != 5) {
+			usedSocket.close();
+			return;
+		}
+		int nmethods = bytes[1] & 0xFF;
+		// 方法列表未收全：等下一包再处理，避免误判客户端能力
+		if (buffer.length() < 2 + nmethods) {
+			return;
+		}
+		// 按协议逐个扫描客户端支持的方法，而非看末尾字节：
+		// [0,2]（无认证+密码）这类列表会被末尾字节误判为不支持认证
+		boolean supportsPassword = false;
+		for (int i = 0; i < nmethods; i++) {
+			if ((bytes[2 + i] & 0xFF) == 2) {
+				supportsPassword = true;
+				break;
 			}
-			if (bytes[bytes.length - 2] == 0) {
-				// 如果客户端不支持认证
-				writeAndClose(new byte[] { 5, (byte) 0xFF });
-			}
-			if (bytes[bytes.length - 1] != 2) {
-				// 如果用户没填账号密码
-				writeAndClose(new byte[] { 5, 0x02 });
-				return;
-			}
-			// 设置账号密码认证
+		}
+		if (supportsPassword) {
+			// 服务器要求认证：即使客户端同时支持无认证，也必须选定账号密码认证
 			usedSocket.write(Buffer.buffer(new byte[] { 5, 0x02 })).onSuccess((res) -> {
 				readDataHandler = this::onAuth;
 			});
+			return;
 		}
+		// 无可用的认证方法（客户端不支持账号密码认证），拒绝
+		writeAndClose(new byte[] { 5, (byte) 0xFF });
 	}
 
 	private void onNotAuth(Buffer buffer) {

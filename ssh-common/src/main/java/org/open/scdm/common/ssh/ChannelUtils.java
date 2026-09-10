@@ -68,24 +68,14 @@ public class ChannelUtils {
 		// 远端数据由 MINA 会话线程直接推给该流（内部为 Vert.x 异步写，不阻塞 IO 线程）；
 		// 通道关闭时 MINA 会 close 该流，进而在 AsynchOutputStream 中关闭本地 socket
 		targetChannel.setOut(new AsynchOutputStream(host, port, socket));
-		// 通道打开确认即代表远端 TCP 已连通；失败/超时由 verify 抛出异常
-		targetChannel.open().verify(CHANNEL_CONNECT_TIMEOUT, TimeUnit.MILLISECONDS);
-		// 本地→远端：阻塞写，遵守远端流控窗口
-		OutputStream stream = targetChannel.getInvertedIn();
-		// http 代理普通转发：通道连通后先把改写后的请求写给目标。
-		// 此时 socket.handler 尚未装配，客户端数据不会插队，写入顺序有保证。
-		if (initialToTarget != null && initialToTarget.length > 0) {
-			stream.write(initialToTarget);
-			stream.flush();
-		}
-		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复关闭通道
-		AtomicBoolean closed = new AtomicBoolean(false);
 		// per-connection 单虚拟线程串行执行器：
 		// getInvertedIn().write 是阻塞写（等待 SSH 通道窗口），若直接在 socket.handler（event loop 线程）
 		// 中执行，远端慢时会阻塞整个 event loop，拖垮同线程上所有连接。
 		// 改用每连接一个虚拟线程串行消费，既保证 TCP 字节流顺序，又不阻塞 event loop。
 		ExecutorService writer = Executors.newSingleThreadExecutor(
 				Thread.ofVirtual().name("ssh-chan-writer-", 0).factory());
+		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复关闭通道
+		AtomicBoolean closed = new AtomicBoolean(false);
 		Runnable closeChannel = () -> {
 			if (!closed.compareAndSet(false, true)) {
 				return;
@@ -94,6 +84,32 @@ public class ChannelUtils {
 			targetChannel.close(true);
 			Logf.log("连接%s已断开，同时关闭%s:%s", socket.remoteAddress(), host, port);
 		};
+		// 必须在发起通道打开之前绑定 socket 关闭/异常钩子：
+		// 客户端在通道建立期间断开时 verify 不会失败，若不在此关闭通道，
+		// 已打开的通道将无人管理，服务端为其保持的目标连接会永久泄漏 fd
+		socket.closeHandler(v -> closeChannel.run());
+		socket.exceptionHandler(v -> closeChannel.run());
+		try {
+			// 通道打开确认即代表远端 TCP 已连通；失败/超时由 verify 抛出异常
+			targetChannel.open().verify(CHANNEL_CONNECT_TIMEOUT, TimeUnit.MILLISECONDS);
+		} catch (IOException | RuntimeException e) {
+			// verify 超时后通道可能仍在等确认；不主动关闭的话，迟到的 OPEN_CONFIRMATION
+			// 会留下一条无人管理的半开通道，服务端 socket 持续泄漏 fd 直到句柄耗尽
+			closeChannel.run();
+			throw e;
+		}
+		// socket 在通道建立期间已被客户端关闭：通道已由 closeHandler 关闭，终止本次转发
+		if (closed.get()) {
+			throw new IOException("客户端连接已关闭:" + socket.remoteAddress());
+		}
+		// 本地→远端：阻塞写，遵守远端流控窗口
+		OutputStream stream = targetChannel.getInvertedIn();
+		// http 代理普通转发：通道连通后先把改写后的请求写给目标。
+		// 此时 socket.handler 尚未装配，客户端数据不会插队，写入顺序有保证。
+		if (initialToTarget != null && initialToTarget.length > 0) {
+			stream.write(initialToTarget);
+			stream.flush();
+		}
 		socket.handler(buf -> {
 			byte[] bytes = buf.getBytes();
 			if (bytes.length == 0) {
@@ -117,7 +133,5 @@ public class ChannelUtils {
 				closeChannel.run();
 			}
 		});
-		socket.closeHandler(v -> closeChannel.run());
-		socket.exceptionHandler(v -> closeChannel.run());
 	}
 }

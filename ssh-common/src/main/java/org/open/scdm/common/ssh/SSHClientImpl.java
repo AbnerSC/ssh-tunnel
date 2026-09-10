@@ -14,6 +14,7 @@ import org.open.scdm.common.config.SSHConfig;
 import org.apache.sshd.client.SshClient;
 import org.apache.sshd.client.auth.keyboard.UserInteraction;
 import org.apache.sshd.client.keyverifier.AcceptAllServerKeyVerifier;
+import org.apache.sshd.client.future.ConnectFuture;
 import org.apache.sshd.client.session.ClientSession;
 import org.apache.sshd.common.NamedFactory;
 import org.apache.sshd.common.cipher.BuiltinCiphers;
@@ -130,11 +131,21 @@ public class SSHClientImpl {
 	public void openSession() throws Exception {
 		sshStatus = SSHStatusEnum.CONNECTING;
 		Logf.log("尝试创建连接%s", sshConfig.toScript());
-		// 仅建立 SSH 会话：SOCKS5/端口转发走 Session 上的 direct-tcpip 通道，与交互式 shell 无关
-		ClientSession session = SSH_CLIENT
-				.connect(sshConfig.getUserName(), sshConfig.getAddr(), sshConfig.getPort())
-				.verify(CONNECT_TIMEOUT, TimeUnit.MILLISECONDS)
-				.getSession();
+		// 仅建立 SSH 会话：SOCKS5/端口转发走 Session 上的 direct-tcpip 通道，与交互式 shell 无关。
+		// 超时后 ConnectFuture 可能仍持着底层 socket，若不 close 会在 NIO selector/底层连接处泄漏 fd，
+		// 长时间运行下累积耗尽句柄，因此超时也必须关闭 future 持有的会话
+		ConnectFuture connectFuture = SSH_CLIENT.connect(sshConfig.getUserName(), sshConfig.getAddr(),
+				sshConfig.getPort());
+		ClientSession session;
+		try {
+			session = connectFuture.verify(CONNECT_TIMEOUT, TimeUnit.MILLISECONDS).getSession();
+		} catch (IOException | RuntimeException e) {
+			ClientSession unfinished = connectFuture.getSession();
+			if (unfinished != null) {
+				unfinished.close(true);
+			}
+			throw e;
+		}
 		try {
 			session.addPasswordIdentity(sshConfig.getPassword());
 			// keyboard-interactive 兜底：部分服务端(PAM)只接受交互式认证

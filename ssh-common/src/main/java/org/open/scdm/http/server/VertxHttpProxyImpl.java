@@ -28,7 +28,7 @@ class VertxHttpProxyImpl {
 			.getBytes(StandardCharsets.ISO_8859_1);
 	private static final byte[] REPLY_BAD_REQUEST = "HTTP/1.1 400 Bad Request\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
 			.getBytes(StandardCharsets.ISO_8859_1);
-	private static final byte[] REPLY_AUTH_REQUIRED = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"ssh-tunnel\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+	private static final byte[] REPLY_AUTH_REQUIRED = "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Basic realm=\"ssh-tunnel\"\r\nContent-Length: 0\r\n\r\n"
 			.getBytes(StandardCharsets.ISO_8859_1);
 
 	private final String userName;
@@ -127,7 +127,9 @@ class VertxHttpProxyImpl {
 		// 认证：http 代理使用 Proxy-Authorization: Basic
 		if (auth && !checkAuth(headers.get("proxy-authorization"))) {
 			Logf.log("http代理认证不通过:%s", usedSocket.remoteAddress());
-			writeAndClose(REPLY_AUTH_REQUIRED);
+			// 不携带 Connection: close：客户端可在同一连接上带凭据重试，
+			// 避免高并发下每个请求都要「新连接→407→关连接→再新连接」的双连接模式
+			writeAndContinue(REPLY_AUTH_REQUIRED);
 			return;
 		}
 
@@ -295,5 +297,22 @@ class VertxHttpProxyImpl {
 
 	private void writeAndClose(byte[] arr) {
 		usedSocket.write(Buffer.buffer(arr)).onComplete((res) -> usedSocket.close());
+	}
+
+	/**
+	 * 应答后保持连接并重置解析状态，用于 407 后接收客户端同一连接上的重试请求
+	 */
+	private void writeAndContinue(byte[] arr) {
+		pending = Buffer.buffer();
+		scanned = 0;
+		dispatched = false;
+		usedSocket.write(Buffer.buffer(arr));
+		// 重试请求限时到达，否则关闭连接避免空闲连接无限滞留
+		delayCloseTimer = vertx.setTimer(5000, (v) -> {
+			if (!dispatched) {
+				Logf.log("http代理连接长时间未发送请求，主动关闭:%s", usedSocket.remoteAddress());
+				usedSocket.close();
+			}
+		});
 	}
 }
