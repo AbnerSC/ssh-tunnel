@@ -307,6 +307,10 @@ class VertxHttpProxyImpl {
 		scanned = 0;
 		dispatched = false;
 		usedSocket.write(Buffer.buffer(arr));
+		// 认证失败不进入转发链路，onData 中的 pause 必须在此解除：
+		// 否则客户端收到 407 后在同一连接上的重试请求永远到不了 handler
+		// （git/libcurl 的 CONNECT 即如此重试），最终被超时定时器关闭，客户端报 Proxy CONNECT aborted
+		usedSocket.resume();
 		// 重试请求限时到达，否则关闭连接避免空闲连接无限滞留
 		delayCloseTimer = vertx.setTimer(5000, (v) -> {
 			if (!dispatched) {
