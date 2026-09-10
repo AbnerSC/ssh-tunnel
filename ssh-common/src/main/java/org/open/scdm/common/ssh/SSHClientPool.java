@@ -114,8 +114,9 @@ public class SSHClientPool extends ABSDispatcher {
 				task.run();
 			} catch (Exception e) {
 				if (Logf.isLog()) {
+					// 会话失效/连接失败等运行期异常的消息已足够定位，
+					// 不打印原始堆栈（printStackTrace 直写 stderr，会与日志流交错打乱 docker 日志）
 					Logf.log("发生运行时异常: %s", e.getMessage() == null ? e.toString() : e.getMessage());
-					e.printStackTrace();
 				}
 				clientImpl.setNextRunTime(System.currentTimeMillis() + ERROR_WAIT_TIME);
 				clientImpl.disconnectSession();
