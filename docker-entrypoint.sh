@@ -18,6 +18,8 @@
 #   SSH_POOL        -> -pool   SSH 连接池大小（默认 5）
 #   DIRECT_IP       -> -direct-ip   直连 IP/网段，多个值用逗号或空格分隔（如 "192.168.1.10,10.0.0.0/8"）
 #   DIRECT_DOMAIN   -> -direct-domain 直连域名（匹配主域名），多个值用逗号或空格分隔
+#   DIRECT_CN       -> -direct-cn    中国域名全量直连（geosite:cn）；取 true 启用默认列表，
+#                                  也可直接写 geosite 名（如 "cn,private"，逗号分隔）
 #   JAVA_OPTS       -> 覆盖下面默认的 JVM 调优参数
 # =====================================================================
 set -euo pipefail
@@ -49,6 +51,8 @@ add_arg "${SSH_POOL:-}"       "-pool"
 # 命中规则的请求由容器本地直接访问，不经过远程 SSH 代理
 add_arg "${DIRECT_IP:-}"     "-direct-ip"
 add_arg "${DIRECT_DOMAIN:-}" "-direct-domain"
+# 中国域名全量直连：geosite 数据内置于镜像的 dlc.dat，取 true 走默认 cn 列表
+add_arg "${DIRECT_CN:-}"     "-direct-cn"
 
 # JAVA_OPTS 未设置时用默认调优参数；此处依赖单词拆分展开为多个 JVM 选项。
 # APP_ARGS 用双引号数组展开，确保含空格/特殊字符的值（如密码）作为单个参数传入

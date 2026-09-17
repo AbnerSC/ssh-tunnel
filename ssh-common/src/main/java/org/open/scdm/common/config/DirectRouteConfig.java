@@ -8,6 +8,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 
 import org.open.scdm.common.ssh.Logf;
 
@@ -15,7 +16,8 @@ import org.open.scdm.common.ssh.Logf;
  * 直连路由配置：直连 IP（单 IP 与网段）与直连域名（主域名匹配）。
  * <p>
  * 命中任一规则的目标由本地直接访问，不经过远程 SSH 代理。
- * 单个配置项内允许用逗号或空白分隔多个值，也允许重复传入参数累积。
+ * 单个配置项内允许用逗号或空白分隔多个值，也允许重复传入参数累积；
+ * 还可通过 {@link #addGeoSiteRules} 追加 dlc.dat(geosite) 域名规则。
  */
 public class DirectRouteConfig {
 	/**
@@ -43,6 +45,18 @@ public class DirectRouteConfig {
 	 * 直连域名（小写、去尾部点）
 	 */
 	private final Set<String> domains = new HashSet<>();
+	/**
+	 * 完整匹配域名（geosite full:，小写、去尾部点），仅命中域名本身不含子域
+	 */
+	private final Set<String> fullDomains = new HashSet<>();
+	/**
+	 * 关键字域名（geosite keyword:，小写），主机名包含即命中
+	 */
+	private final List<String> keywords = new ArrayList<>();
+	/**
+	 * 正则域名（geosite regexp:），部分匹配(find)语义，与 v2ray 一致
+	 */
+	private final List<Pattern> regexps = new ArrayList<>();
 
 	public DirectRouteConfig(List<String> directIps, List<String> directDomains) {
 		if (directIps != null) {
@@ -81,15 +95,31 @@ public class DirectRouteConfig {
 			}
 			return false;
 		}
-		// 域名主域匹配：example.com 命中 www.example.com / a.b.example.com，不命中 notexample.com
+		// 域名匹配，按成本从低到高：full 精确 → 主域 → 关键字 → 正则
 		String lower = stripTailDot(str.toLowerCase(Locale.ROOT));
+		// full 完整匹配：full:example.com 仅命中该域名本身
+		if (fullDomains.contains(lower)) {
+			return true;
+		}
+		// 域名主域匹配：example.com 命中 www.example.com / a.b.example.com，不命中 notexample.com
 		if (domains.contains(lower)) {
 			return true;
 		}
 		int idx;
-		while ((idx = lower.indexOf('.')) >= 0) {
-			lower = lower.substring(idx + 1);
-			if (domains.contains(lower)) {
+		String suffix = lower;
+		while ((idx = suffix.indexOf('.')) >= 0) {
+			suffix = suffix.substring(idx + 1);
+			if (domains.contains(suffix)) {
+				return true;
+			}
+		}
+		for (String keyword : keywords) {
+			if (lower.contains(keyword)) {
+				return true;
+			}
+		}
+		for (Pattern regexp : regexps) {
+			if (regexp.matcher(lower).find()) {
 				return true;
 			}
 		}
@@ -97,7 +127,8 @@ public class DirectRouteConfig {
 	}
 
 	public boolean isEmpty() {
-		return ips.isEmpty() && cidrs.isEmpty() && domains.isEmpty();
+		return ips.isEmpty() && cidrs.isEmpty() && domains.isEmpty() && fullDomains.isEmpty() && keywords.isEmpty()
+				&& regexps.isEmpty();
 	}
 
 	/**
@@ -111,7 +142,37 @@ public class DirectRouteConfig {
 	 * 域名规则数量
 	 */
 	public int domainRuleCount() {
-		return domains.size();
+		return domains.size() + fullDomains.size() + keywords.size() + regexps.size();
+	}
+
+	/**
+	 * 追加 geosite 域名规则（解析自 dlc.dat，见 {@link GeoSiteDlc}）：
+	 * domain 归入主域匹配，full 归入完整匹配，keyword/regexp 按各自语义匹配。
+	 * 不兼容 Java 正则语法的 regexp 规则记日志后忽略
+	 */
+	public void addGeoSiteRules(List<GeoSiteDlc.DomainRule> rules) {
+		if (rules == null) {
+			return;
+		}
+		for (GeoSiteDlc.DomainRule rule : rules) {
+			String value = rule.value().trim().toLowerCase(Locale.ROOT);
+			if (value.isEmpty()) {
+				continue;
+			}
+			switch (rule.type()) {
+				case GeoSiteDlc.TYPE_DOMAIN -> domains.add(stripTailDot(value));
+				case GeoSiteDlc.TYPE_FULL -> fullDomains.add(stripTailDot(value));
+				case GeoSiteDlc.TYPE_KEYWORD -> keywords.add(value);
+				case GeoSiteDlc.TYPE_REGEXP -> {
+					try {
+						regexps.add(Pattern.compile(value));
+					} catch (PatternSyntaxException _) {
+						Logf.printf("忽略不兼容的geosite正则:%s", value);
+					}
+				}
+				default -> Logf.printf("忽略未知geosite规则类型:%d %s", rule.type(), value);
+			}
+		}
 	}
 
 	private void addIp(String item) {
