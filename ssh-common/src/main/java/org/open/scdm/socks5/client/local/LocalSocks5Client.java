@@ -27,8 +27,8 @@ public class LocalSocks5Client implements Socks5ClientConsumer {
 	}
 
 	@Override
-	public void handle(String host, Integer port, byte[] hostBytes, NetSocket usedSocket) {
-		new LocalSocks5ClientImpl(host, port, hostBytes, usedSocket, netClient);
+	public void handle(String host, Integer port, byte[] hostBytes, byte[] initialData, NetSocket usedSocket) {
+		new LocalSocks5ClientImpl(host, port, hostBytes, initialData, usedSocket, netClient);
 	}
 
 	@Override

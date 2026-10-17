@@ -20,7 +20,8 @@ public class AsynchOutputStream extends OutputStream {
 	 */
 	private static final long MAX_PENDING_BYTES = 16 * 1024 * 1024;
 	/**
-	 * 写队列持续满的最长时间(ms)：客户端写盘卡顿、TCP 窗口收缩等瞬时停读应远小于该值
+	 * 写队列持续无排空进度的最长时间(ms)：客户端只是慢（如 Google Play 安装阶段暂停读取、
+	 * 手机息屏限速）仍会持续排空，不应误杀；只有完全无进度才判死
 	 */
 	private static final long STUCK_FULL_TIMEOUT = 30_000L;
 
@@ -41,6 +42,15 @@ public class AsynchOutputStream extends OutputStream {
 	 * 写队列开始持续满的时刻，0 表示当前不满
 	 */
 	private volatile long fullSince;
+	/**
+	 * 累计排空次数（每次 socket 写完成 +1）：队列虽满但计数在增长，
+	 * 说明客户端只是慢而非死，重置计时避免误杀大文件下载/安装阶段的暂停读取
+	 */
+	private final AtomicLong drainSeq = new AtomicLong();
+	/**
+	 * 本轮持续满开始时的排空计数，用于判定窗口内有无进展
+	 */
+	private volatile long drainSeqAtFull;
 
 	public AsynchOutputStream(String host, Integer port, NetSocket socket) {
 		this.host = host;
@@ -68,8 +78,15 @@ public class AsynchOutputStream extends OutputStream {
 		// 一个慢客户端会拖垮共享会话上的全部连接（历史教训）
 		if (socket.writeQueueFull()) {
 			long now = System.currentTimeMillis();
+			long seq = drainSeq.get();
 			if (fullSince == 0) {
 				fullSince = now;
+				drainSeqAtFull = seq;
+			} else if (seq != drainSeqAtFull) {
+				// 窗口内有排空进度：客户端只是消费慢，重新计时而非判死，
+				// 否则 Play 安装/息屏等暂停读超过 30s 会把正常下载掐断
+				fullSince = now;
+				drainSeqAtFull = seq;
 			} else if (now - fullSince >= STUCK_FULL_TIMEOUT) {
 				breakConnection("客户端持续未消费");
 				return;
@@ -86,7 +103,10 @@ public class AsynchOutputStream extends OutputStream {
 		// 免去原先 new byte[len] + arraycopy 的整段中间拷贝；
 		// 写完成即从积压计数中扣除，已进内核发送缓冲的部分不再占用堆内存
 		this.socket.write(Buffer.buffer().appendBytes(bytes, off, len))
-				.onComplete((v) -> pendingBytes.addAndGet(-len));
+				.onComplete((v) -> {
+					pendingBytes.addAndGet(-len);
+					drainSeq.incrementAndGet();
+				});
 	}
 
 	public void close() throws IOException {

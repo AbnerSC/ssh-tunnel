@@ -42,6 +42,7 @@ services:
     image: babyfly/ssh-tunnel:latest
     container_name: ssh-tunnel
     hostname: linux
+    restart: unless-stopped   # 异常退出/宿主机重启后自动拉起，配合镜像内置健康检查
     environment:
       - TZ=Asia/Shanghai
       - SOCKS_PORT=6666
@@ -60,7 +61,7 @@ services:
       - 16667:6667
     volumes:
       - ./logs:/app/logs
-    mem_limit: 256m
+    mem_limit: 1g   # 需大于镜像默认 -Xmx512m + 元空间/线程栈开销；内存充裕可上调，受限可用 JAVA_OPTS 压低堆
 ```
 
 - 环境变量说明：
@@ -99,3 +100,4 @@ curl -x http://socks_user:socks_pwd@127.0.0.1:6667 https://www.google.com
 - [X] 增加直连IP配置(支持IP和网段)，直连IP由本地直接访问，不经过远程SSH代理（`-direct-ip`，支持 CIDR 与点分掩码）
 - [X] 增加直连域名配置(支持匹配主域名)，直连域名由本地直接访问，不经过远程SSH代理（`-direct-domain`）
 - [X] 内置 geosite 数据(`dlc.dat`)，`-direct-cn` 一键中国域名全量直连(也可指定其它 geosite 列表)
+- [X] SOCKS5 支持 IPv6 目标地址(兼容 Android 双栈网络偏好解析 AAAA 的场景，如 Google Play 下载)，需隧道服务端具备 IPv6 出口

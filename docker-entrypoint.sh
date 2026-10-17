@@ -24,10 +24,11 @@
 # =====================================================================
 set -euo pipefail
 
-# 低内存 JVM 调优：Serial GC + 固定小堆（socks5 转发为轻量 IO，无需大堆）；
-# --enable-native-access 抑制 vertx 可选 native 传输在 JDK 25 下的告警。
-# 可通过环境变量 JAVA_OPTS 整体覆盖。
-DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseSerialGC -Xms32m -Xmx128m -Xss512k -XX:MaxMetaspaceSize=64m -XX:ReservedCodeCacheSize=64m"
+# JVM 调优：Serial GC + 足够堆内存。堆不能过小：单连接写积压上限 16MB，
+# 几路并发大文件下载即可突破 128MB 堆，OOM 后调度/会话停摆，
+# 表现为长时间运行后“无法代理且重启容器才恢复”（--enable-native-access 抑制 vertx
+# 可选 native 传输在 JDK 25 下的告警）。可通过环境变量 JAVA_OPTS 整体覆盖。
+DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseSerialGC -Xms64m -Xmx512m -Xss512k -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=64m"
 
 # 程序运行参数（用数组承载，避免密码等含空格/特殊字符时被错误分词）
 APP_ARGS=()

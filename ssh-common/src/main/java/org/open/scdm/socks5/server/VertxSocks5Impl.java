@@ -63,19 +63,6 @@ class VertxSocks5Impl {
 	}
 
 	/**
-	 * 请求连接
-	 * 
-	 * @param addr
-	 * @param port
-	 * @param hostBytes
-	 * @param addrtype
-	 */
-	private void requestConnect(String addr, int port, byte[] hostBytes, byte addrtype) {
-		// 请求日志由 onConnectRequest 统一输出，避免同一请求打两遍
-		clientConsumer.handle(addr, port, hostBytes, usedSocket);
-	}
-
-	/**
 	 * 当收到连接请求时
 	 * 
 	 * @param buffer
@@ -88,27 +75,42 @@ class VertxSocks5Impl {
 			return;
 		}
 		byte addrtype = bytes[3];// ADDRESS_TYPE 目标服务器地址类型
-		byte addrLen = 4;
-		int port = readPort(bytes);
-		if (addrtype == 3) {// 0x03 域名地址(没有打错，就是没有0x02)，
-			addrLen = bytes[4];// 域名地址的第1个字节为域名长度，剩下字节为域名名称字节数组
-		} else if (addrtype != 1 && addrtype != 4) {
+		int reqLen;// 连接请求帧总长(含头)，据此精确解析端口/应答字段
+		String remoteAddr;
+		if (addrtype == 1) {// 0x01 IP V4地址
+			reqLen = 10;
+			remoteAddr = readIPV4(bytes);
+		} else if (addrtype == 3) {// 0x03 域名地址(没有打错，就是没有0x02)
+			int domainLen = bytes[4] & 0xFF;// 域名地址的第1个字节为域名长度
+			reqLen = 7 + domainLen;
+			if (bytes.length < reqLen) {
+				// 域名长度超出当前分片，帧不完整
+				usedSocket.close();
+				return;
+			}
+			remoteAddr = new String(bytes, 5, domainLen, StandardCharsets.UTF_8);
+		} else if (addrtype == 4) {// 0x04 IP V6地址
+			// 原实现对 v6 直接回 0x07 拒绝：Google 系域名普遍双栈，Android 偏好解析 AAAA 后，
+			// 表现为「其他上网正常，唯独 Google Play 下载/更新失败」；此处解析后透传给隧道，
+			// 由 SSH 服务端按字面地址连接（服务端需具备 v6 出口能力）
+			reqLen = 22;
+			if (bytes.length < reqLen) {
+				usedSocket.close();
+				return;
+			}
+			remoteAddr = readIPV6(bytes);
+		} else {
 			usedSocket.close();
 			return;
 		}
-		String remoteAddr;
-		if (addrtype == 1) {// 0x01 IP V4地址
-			remoteAddr = readIPV4(bytes);
-		} else if (addrtype == 4) { // 0x04 IP V6地址
-			writeAndClose(new byte[] { 0x05, 0x08, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 });
-			return;// 不支持IP V6
-		} else {
-			remoteAddr = new String(bytes, 5, addrLen, StandardCharsets.UTF_8);
-		}
-		// 直接从缓冲区间拷贝（去掉 VER/REP 两字节），免于先整段拷贝再 arraycopy 的双重拷贝
-		byte[] hostBytes = buffer.getBytes(2, buffer.length());
-		Logf.log("收到代理请求 %s:%d,类型:%s", remoteAddr, port, addrtype == 1 ? "ipv4" : "域名");
-		requestConnect(remoteAddr, port, hostBytes, addrtype);
+		int port = readPort(bytes, reqLen);
+		// BND 应答字段取帧内精确切片；原先按整段切片，客户端把连接请求与协议数据
+		// 同段粘连发送时会污染应答，且粘连数据被整体丢弃（目标收不到首包，TLS 握手挂死）
+		byte[] hostBytes = buffer.getBytes(2, reqLen);
+		byte[] initialData = bytes.length > reqLen ? buffer.getBytes(reqLen, buffer.length()) : null;
+		Logf.log("收到代理请求 %s:%d,类型:%s", remoteAddr, port,
+				addrtype == 1 ? "ipv4" : (addrtype == 4 ? "ipv6" : "域名"));
+		clientConsumer.handle(remoteAddr, port, hostBytes, initialData, usedSocket);
 	}
 
 	/**
@@ -209,6 +211,20 @@ class VertxSocks5Impl {
 	}
 
 	/**
+	 * 读取 IPv6 地址，输出小写压缩形式（如 2001:db8::1），作为 direct-tcpip 的目标主机字面量
+	 */
+	private String readIPV6(byte[] bytes) {
+		byte[] addr = new byte[16];
+		System.arraycopy(bytes, 4, addr, 0, 16);
+		try {
+			return java.net.InetAddress.getByAddress(addr).getHostAddress();
+		} catch (java.net.UnknownHostException _) {
+			// 16 字节定长解析不会失败，兜底返回非法值由上层按连接失败处理
+			return null;
+		}
+	}
+
+	/**
 	 * 读取目标ip
 	 * 
 	 * @param bytes
@@ -233,13 +249,14 @@ class VertxSocks5Impl {
 	}
 
 	/**
-	 * 解析出端口
+	 * 解析出端口：按连接请求帧的精确长度取值，而非缓冲区末尾
+	 * （客户端粘连后续协议数据时，缓冲区末尾不再是端口字段）
 	 * 
 	 * @param bytes
+	 * @param reqLen 连接请求帧总长
 	 * @return
 	 */
-	private int readPort(byte[] bytes) {
-		int index = bytes.length - 2;
-		return (bytes[index++] & 0xff) << 8 | (bytes[index++] & 0xff);
+	private int readPort(byte[] bytes, int reqLen) {
+		return (bytes[reqLen - 2] & 0xff) << 8 | (bytes[reqLen - 1] & 0xff);
 	}
 }

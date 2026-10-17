@@ -3,6 +3,7 @@ package org.open.scdm.socks5.client.local;
 import org.open.scdm.common.ssh.ChannelUtils;
 import org.open.scdm.common.ssh.Logf;
 
+import io.vertx.core.buffer.Buffer;
 import io.vertx.core.net.NetClient;
 import io.vertx.core.net.NetSocket;
 
@@ -15,8 +16,8 @@ class LocalSocks5ClientImpl {
 	 */
 	NetSocket usedSocket;
 
-	public LocalSocks5ClientImpl(String host, Integer port, byte[] hostBytes, NetSocket usedSocket,
-			NetClient netClient) {
+	public LocalSocks5ClientImpl(String host, Integer port, byte[] hostBytes, byte[] initialData,
+			NetSocket usedSocket, NetClient netClient) {
 		this.usedSocket = usedSocket;
 		// Vert.x 5 移除了 connect(int, String, Handler<AsyncResult<NetSocket>>) 回调重载，只能链 Future
 		netClient.connect(port, host).onComplete((res) -> {
@@ -26,13 +27,19 @@ class LocalSocks5ClientImpl {
 				// 先绑定关闭，pipeTo 会覆盖源端的 handler/endHandler/exceptionHandler
 				bindClose(target, usedSocket);
 				bindClose(usedSocket, target);
+				// 粘连在连接请求后的首包先写给目标（在装配转发 handler 之前，顺序有保证）
+				if (initialData != null && initialData.length > 0) {
+					target.write(Buffer.buffer(initialData));
+				}
 				usedSocket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x00 }, hostBytes)).onSuccess((v) -> {
 					pipe(target, usedSocket);
 					pipe(usedSocket, target);
 				});
 			} else {
 				Logf.log("无法连接请求 %s:%d,%s", host, port, res.cause());
-				usedSocket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x03 }, hostBytes));
+				// 回完失败应答必须关闭：握手超时定时器已取消，不关则连接永久悬挂泄漏句柄
+				usedSocket.write(ChannelUtils.joinBuffer(new byte[] { 0x05, 0x03 }, hostBytes))
+						.onComplete((v) -> usedSocket.close());
 			}
 		});
 	}

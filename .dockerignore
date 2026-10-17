@@ -4,6 +4,7 @@
 .idea
 .workbuddy
 target/
+.flattened-pom.xml
 logs/
 db/
 docs/

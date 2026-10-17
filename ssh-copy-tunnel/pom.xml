@@ -3,14 +3,14 @@
 	<parent>
 		<groupId>org.open.scdm</groupId>
 		<artifactId>ssh-tunnel</artifactId>
-		<version>1.2.0</version>
+		<version>${revision}</version>
 	</parent>
 	<artifactId>ssh-copy-tunnel</artifactId>
 	<dependencies>
 		<dependency>
 			<groupId>org.open.scdm</groupId>
 			<artifactId>ssh-common</artifactId>
-			<version>${project.version}</version>
+			<version>${revision}</version>
 		</dependency>
 	</dependencies>
 	<build>

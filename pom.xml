@@ -2,23 +2,28 @@
 	<modelVersion>4.0.0</modelVersion>
 	<groupId>org.open.scdm</groupId>
 	<artifactId>ssh-tunnel</artifactId>
-	<version>1.2.0</version>
+	<!-- 全项目唯一版本号入口：升级只改下面 properties 里的 <revision>，
+	     子模块 <parent> 与本模块均引用 ${revision}，无需逐个文件修改 -->
+	<version>${revision}</version>
 	<packaging>pom</packaging>
 	<description>SSH 隧道工具</description>
 	<properties>
+		<revision>1.2.1</revision>
+
 		<java.version>25</java.version>
 		<maven.compiler.release>${java.version}</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
 
 		<lombok.version>1.18.46</lombok.version>
-		<mina-sshd.version>2.19.0</mina-sshd.version>
+		<mina-sshd.version>3.0.0-M6</mina-sshd.version>
 		<logback.version>1.6.3</logback.version>
 		<slf4j.version>2.0.18</slf4j.version>
-		<vertx.version>5.1.7</vertx.version>
+		<vertx.version>5.2.1</vertx.version>
 
 		<maven-compiler-plugin.version>3.16.0</maven-compiler-plugin.version>
 		<maven-shade-plugin.version>3.6.2</maven-shade-plugin.version>
+		<flatten-maven-plugin.version>1.8.0</flatten-maven-plugin.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
@@ -77,6 +82,11 @@
 					<artifactId>maven-shade-plugin</artifactId>
 					<version>${maven-shade-plugin.version}</version>
 				</plugin>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>flatten-maven-plugin</artifactId>
+					<version>${flatten-maven-plugin.version}</version>
+				</plugin>
 			</plugins>
 		</pluginManagement>
 		<plugins>
@@ -100,6 +110,32 @@
 						</path>
 					</annotationProcessorPaths>
 				</configuration>
+			</plugin>
+			<!-- 把 ${revision} 展开为真实版本号，产出 .flattened-pom.xml 供 install/deploy 使用，
+			     否则安装到仓库的 pom 会带着无法解析的 ${revision} 字面量 -->
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>flatten-maven-plugin</artifactId>
+				<configuration>
+					<updatePomFile>true</updatePomFile>
+					<flattenMode>resolveCiFriendliesOnly</flattenMode>
+				</configuration>
+				<executions>
+					<execution>
+						<id>flatten</id>
+						<phase>process-resources</phase>
+						<goals>
+							<goal>flatten</goal>
+						</goals>
+					</execution>
+					<execution>
+						<id>flatten-clean</id>
+						<phase>clean</phase>
+						<goals>
+							<goal>clean</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 	</build>

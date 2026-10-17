@@ -112,15 +112,23 @@ public class SSHClientPool extends ABSDispatcher {
 		VertxUtil.current().pushTask(() -> {
 			try {
 				task.run();
-			} catch (Exception e) {
+			} catch (Throwable e) {
+				// 捕获 Throwable：OOM 等 Error 若逃逸会留下 CONNECTING/CONNECTED 的卡死状态，
+				// 状态机从此不再重连；任何失败都必须断开并按退避时间重试
 				if (Logf.isLog()) {
 					// 会话失效/连接失败等运行期异常的消息已足够定位，
 					// 不打印原始堆栈（printStackTrace 直写 stderr，会与日志流交错打乱 docker 日志）
 					Logf.log("发生运行时异常: %s", e.getMessage() == null ? e.toString() : e.getMessage());
 				}
-				clientImpl.setNextRunTime(System.currentTimeMillis() + ERROR_WAIT_TIME);
-				clientImpl.disconnectSession();
-				electMain();
+				try {
+					clientImpl.setNextRunTime(System.currentTimeMillis() + ERROR_WAIT_TIME);
+					clientImpl.disconnectSession();
+					electMain();
+				} catch (Throwable cleanup) {
+					// 清理阶段再失败也不能卡住状态机，下次调度会重新收敛
+					Logf.log("断开会话时发生异常: %s",
+							cleanup.getMessage() == null ? cleanup.toString() : cleanup.getMessage());
+				}
 			}
 		});
 	}

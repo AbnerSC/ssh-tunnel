@@ -32,13 +32,13 @@ public class DirectRouteSocks5Client implements Socks5ClientConsumer {
 	}
 
 	@Override
-	public void handle(String host, Integer port, byte[] hostBytes, NetSocket usedSocket) {
+	public void handle(String host, Integer port, byte[] hostBytes, byte[] initialData, NetSocket usedSocket) {
 		if (tunnel == null || config != null && config.isDirect(host)) {
 			Logf.log("socks5直连 %s:%d", host, port);
-			direct.handle(host, port, hostBytes, usedSocket);
+			direct.handle(host, port, hostBytes, initialData, usedSocket);
 			return;
 		}
-		tunnel.handle(host, port, hostBytes, usedSocket);
+		tunnel.handle(host, port, hostBytes, initialData, usedSocket);
 	}
 
 	@Override
