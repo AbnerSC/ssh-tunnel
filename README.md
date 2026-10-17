@@ -9,10 +9,10 @@
 ### JDK 25
 
 ### 依赖
-- [org.apache.sshd:sshd-core](https://github.com/apache/mina-sshd) 2.19.0
-- [io.vertx:vertx-core](https://vertx.io/) 5.1.7
+- [org.apache.sshd:sshd-core](https://github.com/apache/mina-sshd) 3.0.0-M6
+- [io.vertx:vertx-core](https://vertx.io/) 5.2.1
 - [org.projectlombok:lombok](https://projectlombok.org/) 1.18.46
-- [domain-list-community](https://github.com/v2fly/domain-list-community.git) 20260914091725
+- [domain-list-community](https://github.com/v2fly/domain-list-community.git) 20261015074526
 
 ### 使用说明
 1. 示例：`java -jar ssh-tunnel.jar -D 6666 -H 6667 -suser "socks_user" -spwd "socks_pwd" -server root@1.2.3.4 -p 22 -P "server_pwd"`
