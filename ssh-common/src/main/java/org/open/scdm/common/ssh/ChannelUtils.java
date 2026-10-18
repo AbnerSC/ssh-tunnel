@@ -7,6 +7,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.open.scdm.common.vertx.AsynchOutputStream;
 import org.apache.sshd.client.channel.ChannelDirectTcpip;
@@ -26,6 +27,18 @@ public class ChannelUtils {
 	 * 高 RTT 链路(客户端→SSH 服务器 + 服务器→目标 两段往返)下 1s 容易误判失败
 	 */
 	private static final long CHANNEL_CONNECT_TIMEOUT = 10000;
+
+	/**
+	 * 本地→SSH 方向单连接写积压上限(bytes)：超过此值暂停本地 socket 读取，
+	 * 对上游施加背压，防止 SSH 通道排空不及导致 byte[] 无限堆积。
+	 * 4MB 兼顾突发容忍与内存控制（对比 AsynchOutputStream 反向 16MB 上限）。
+	 */
+	private static final long WRITE_BACKPRESSURE_LIMIT = 4 * 1024 * 1024;
+	/**
+	 * 恢复读取阈值(bytes)：积压降至此后恢复 socket 读取，
+	 * 与上限形成 2:1 的滞回区间避免频繁 pause/resume 抖动。
+	 */
+	private static final long WRITE_RESUME_THRESHOLD = 2 * 1024 * 1024;
 
 	/**
 	 * 拼接
@@ -76,6 +89,9 @@ public class ChannelUtils {
 				Thread.ofVirtual().name("ssh-chan-writer-", 0).factory());
 		// 连接级幂等关闭标志：socket 关闭/异常/写失败可能多次触发 closeChannel，避免重复关闭通道
 		AtomicBoolean closed = new AtomicBoolean(false);
+		// 写积压字节计数：追踪已进入 writer 队列但尚未完成 stream.write() 的字节总量，
+		// 用于施加本地→SSH 方向的背压（原实现无界队列 → byte[] 无限堆积 → OOM/GC 雪崩）
+		AtomicLong pendingWrite = new AtomicLong(0);
 		Runnable closeChannel = () -> {
 			if (!closed.compareAndSet(false, true)) {
 				return;
@@ -111,10 +127,19 @@ public class ChannelUtils {
 			stream.flush();
 		}
 		socket.handler(buf -> {
+			if (closed.get()) {
+				return;
+			}
 			byte[] bytes = buf.getBytes();
 			if (bytes.length == 0) {
 				closeChannel.run();
 				return;
+			}
+			long pending = pendingWrite.addAndGet(bytes.length);
+			// 背压：积压超限时暂停本地 socket 读取，阻止后续更多 byte[] 进入队列；
+			// 当前 buf 的数据仍正常提交，避免丢失
+			if (pending > WRITE_BACKPRESSURE_LIMIT) {
+				socket.pause();
 			}
 			try {
 				writer.execute(() -> {
@@ -126,9 +151,16 @@ public class ChannelUtils {
 							e.printStackTrace();
 						}
 						closeChannel.run();
+					} finally {
+						long remaining = pendingWrite.addAndGet(-bytes.length);
+						// 积压回落后恢复读取（滞回区间避免抖动）
+						if (remaining <= WRITE_RESUME_THRESHOLD && !closed.get()) {
+							socket.resume();
+						}
 					}
 				});
 			} catch (RejectedExecutionException e) {
+				pendingWrite.addAndGet(-bytes.length);
 				// writer 已关闭，连接正在拆除，忽略
 				closeChannel.run();
 			}

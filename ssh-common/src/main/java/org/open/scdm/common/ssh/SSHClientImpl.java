@@ -97,10 +97,11 @@ public class SSHClientImpl {
 	 * <ul>
 	 * <li>AEAD 密码套件优先：MINA 默认顺序(ssh_config)把 CTR 排在 GCM 前，
 	 * Java 的 AES-GCM 有 AES-NI 内建加速且免独立 MAC 计算，明确调到最前</li>
-	 * <li>通道流控窗口：默认 2MB/32KB 包(与 OpenSSH 对齐)，远大于 JSch 的 128KB/16KB，
-	 * 高 RTT 链路下单通道吞吐不再被 窗口/RTT 锁死，无需额外配置</li>
+	 * <li>通道流控窗口：显式设置 2MB 窗口 / 32KB 包，与 OpenSSH 对齐，
+	 * 高 RTT 链路下单通道吞吐不再被 窗口/RTT 锁死</li>
 	 * <li>TCP_NODELAY：MINA 默认关闭，会引入 Nagle 合包延迟，转发场景必须开启</li>
 	 * <li>心跳：15s 一次、连续 3 次无响应判死，静默断链(NAT/防火墙空闲超时)约 45s 内触发重连</li>
+	 * <li>TCP 缓冲区：底层 SSH socket 的 SNDBUF/RCVBUF 设为 4MB，匹配通道窗口避免内核级排队</li>
 	 * </ul>
 	 */
 	private static SshClient createClient() {
@@ -115,6 +116,15 @@ public class SSHClientImpl {
 				BuiltinCiphers.aes128cbc, BuiltinCiphers.aes192cbc, BuiltinCiphers.aes256cbc);
 		client.setCipherFactories(ciphers);
 		CoreModuleProperties.TCP_NODELAY.set(client, Boolean.TRUE);
+		// 显式设置通道流控窗口：2MB 窗口确保 200ms RTT 下仍可提供 ~80Mbps 单通道吞吐
+		CoreModuleProperties.WINDOW_SIZE.set(client, 2L * 1024 * 1024);
+		CoreModuleProperties.MAX_PACKET_SIZE.set(client, 32L * 1024);
+		// 增大 SSH 底层 TCP 缓冲区：避免内核 send buffer 成为吞吐瓶颈
+		CoreModuleProperties.SOCKET_SNDBUF.set(client, 4 * 1024 * 1024);
+		CoreModuleProperties.SOCKET_RCVBUF.set(client, 4 * 1024 * 1024);
+		// 窗口超时：等待远端窗口释放的最大时间，高 RTT 下给远端足够反应时间
+		CoreModuleProperties.WINDOW_TIMEOUT.set(client, Duration.ofSeconds(16));
+		// 心跳配置
 		CoreModuleProperties.HEARTBEAT_INTERVAL.set(client, Duration.ofMillis(SERVER_ALIVE_INTERVAL));
 		CoreModuleProperties.HEARTBEAT_NO_REPLY_MAX.set(client, SERVER_ALIVE_COUNT_MAX);
 		client.start();

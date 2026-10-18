@@ -24,11 +24,14 @@
 # =====================================================================
 set -euo pipefail
 
-# JVM 调优：Serial GC + 足够堆内存。堆不能过小：单连接写积压上限 16MB，
-# 几路并发大文件下载即可突破 128MB 堆，OOM 后调度/会话停摆，
-# 表现为长时间运行后“无法代理且重启容器才恢复”（--enable-native-access 抑制 vertx
-# 可选 native 传输在 JDK 25 下的告警）。可通过环境变量 JAVA_OPTS 整体覆盖。
-DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseSerialGC -Xms64m -Xmx512m -Xss512k -XX:MaxMetaspaceSize=96m -XX:ReservedCodeCacheSize=64m"
+# JVM 调优：G1 GC + 足够堆内存。
+# 原 Serial GC 在高分配速率(网络代理每秒分配数十MB byte[])下 Young GC 可达 100-200ms STW，
+# 导致峰值吞吐瞬间跌落，形成 “高速→内存积压→Full GC→速度暴跌” 恶性循环。
+# G1 并发标记 + 短停顿目标(20ms)有效避免此问题。
+# 堆不能低于单连接写积压上限(4MB)×并发连接数，过小会OOM后调度/会话停摆。
+# --enable-native-access 抑制 vertx 可选 native 传输在 JDK 25 下的告警。
+# 可通过环境变量 JAVA_OPTS 整体覆盖。
+DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+AlwaysPreTouch -Xms128m -Xmx256m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m"
 
 # 程序运行参数（用数组承载，避免密码等含空格/特殊字符时被错误分词）
 APP_ARGS=()
