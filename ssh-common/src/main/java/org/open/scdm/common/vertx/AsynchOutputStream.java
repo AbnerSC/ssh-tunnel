@@ -15,10 +15,13 @@ import io.vertx.core.net.NetSocket;
  */
 public class AsynchOutputStream extends OutputStream {
 	/**
-	 * 单连接写积压硬上限(字节)：取 SSH 通道流控窗口(2MB)的 8 倍。
-	 * 超过该值说明客户端应用已停读，继续缓冲只会推高内存
+	 * 单连接写积压硬上限(字节)：取本端通告的 SSH 通道流控窗口(4MB)等量。
+	 * 窗口锁死了链路在途上限，超出窗口的字节只会躺在堆里等慢客户端消费：
+	 * 它们跨多次 Young GC 存活后被晋升老年代，高吞吐多连接下逐步耗尽堆，
+	 * GC 占比攀升吞噬吞吐（长时间运行速率从峰值逐渐衰减的典型根源），
+	 * 故不再取 8 倍窗口而只保留 1 倍：够填充管道，又不养老年代垃圾
 	 */
-	private static final long MAX_PENDING_BYTES = 16 * 1024 * 1024;
+	private static final long MAX_PENDING_BYTES = 4 * 1024 * 1024;
 	/**
 	 * 写队列持续无排空进度的最长时间(ms)：客户端只是慢（如 Google Play 安装阶段暂停读取、
 	 * 手机息屏限速）仍会持续排空，不应误杀；只有完全无进度才判死
@@ -56,7 +59,8 @@ public class AsynchOutputStream extends OutputStream {
 		this.host = host;
 		this.port = port;
 		this.socket = socket;
-		// 默认上限对背压判定过小（瞬时下载高峰即满），与硬上限对齐
+		// 队列满阈值与硬上限对齐：默认值对背压判定过小（瞬时下载高峰即满），
+		// 写满后由 fullSince/排空进度逻辑区分“慢客户端”与“死客户端”
 		socket.setWriteQueueMaxSize((int) MAX_PENDING_BYTES);
 	}
 

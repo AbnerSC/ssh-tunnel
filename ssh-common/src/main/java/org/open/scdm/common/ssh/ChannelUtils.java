@@ -31,14 +31,17 @@ public class ChannelUtils {
 	/**
 	 * 本地→SSH 方向单连接写积压上限(bytes)：超过此值暂停本地 socket 读取，
 	 * 对上游施加背压，防止 SSH 通道排空不及导致 byte[] 无限堆积。
-	 * 4MB 兼顾突发容忍与内存控制（对比 AsynchOutputStream 反向 16MB 上限）。
+	 * 取值逻辑参考 sing-box 转发层：热路径只保留最小缓冲，在途量由流控窗口决定。
+	 * SSH 通道窗口(2MB)已锁死单通道在途字节，应用队列大于窗口并不能多发一个字节，
+	 * 只会延长 byte[] 存活期——跨代存活被晋升老年代，正是持续高吞吐下
+	 * “速率随运行时间逐渐衰减”的根源；1MB（100Mbps 下约 80ms 缓冲）兼顾突发容忍与内存控制。
 	 */
-	private static final long WRITE_BACKPRESSURE_LIMIT = 4 * 1024 * 1024;
+	private static final long WRITE_BACKPRESSURE_LIMIT = 1024 * 1024;
 	/**
 	 * 恢复读取阈值(bytes)：积压降至此后恢复 socket 读取，
 	 * 与上限形成 2:1 的滞回区间避免频繁 pause/resume 抖动。
 	 */
-	private static final long WRITE_RESUME_THRESHOLD = 2 * 1024 * 1024;
+	private static final long WRITE_RESUME_THRESHOLD = 512 * 1024;
 
 	/**
 	 * 拼接

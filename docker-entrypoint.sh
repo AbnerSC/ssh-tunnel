@@ -24,14 +24,49 @@
 # =====================================================================
 set -euo pipefail
 
-# JVM 调优：G1 GC + 足够堆内存。
-# 原 Serial GC 在高分配速率(网络代理每秒分配数十MB byte[])下 Young GC 可达 100-200ms STW，
-# 导致峰值吞吐瞬间跌落，形成 “高速→内存积压→Full GC→速度暴跌” 恶性循环。
-# G1 并发标记 + 短停顿目标(20ms)有效避免此问题。
-# 堆不能低于单连接写积压上限(4MB)×并发连接数，过小会OOM后调度/会话停摆。
+# JVM 调优：G1 GC + 堆按容器内存限额自适应。
+# 持续高吞吐代理的短命 byte[]/Buffer 分配率达 100~250MB/s，堆过小会使 Young GC
+# 频次激增，写积压缓冲跨代存活被晋升到老年代，老年代渐进填满 → G1 并发回收周期
+# 持续空转 → 吞吐随运行时间逐渐衰减（实测：起步 100Mbps 缓慢降到 ~16Mbps 后稳定，
+# 即 mutator 时间占比被 GC 压缩后的稳态）。因此按容器内存限额推导堆：
+# 预留约 300MB 非堆开销（Metaspace/CodeCache/线程栈/直接缓冲），其余为堆，
+# 下限 256MB、上限 1024MB（1G 限额容器可得 ~700MB 堆，足以支撑 100Mbps+ 持续吞吐）。
 # --enable-native-access 抑制 vertx 可选 native 传输在 JDK 25 下的告警。
 # 可通过环境变量 JAVA_OPTS 整体覆盖。
-DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+AlwaysPreTouch -Xms128m -Xmx256m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m"
+
+# 读取容器内存限额(MB)：cgroup v2 → v1 → 无限额返回 0
+detect_mem_mb() {
+	local v="max"
+	if [ -f /sys/fs/cgroup/memory.max ]; then # cgroup v2
+		v=$(cat /sys/fs/cgroup/memory.max 2>/dev/null || echo max)
+	elif [ -f /sys/fs/cgroup/memory/memory.limit_in_bytes ]; then # cgroup v1
+		v=$(cat /sys/fs/cgroup/memory/memory.limit_in_bytes 2>/dev/null || echo max)
+	fi
+	case "$v" in
+	*[!0-9]*|"") echo 0; return ;; # max 或非法值 → 未设限额
+	esac
+	# cgroup v1 未设限额时给出接近 int64 上限的哨兵值，一并视为无限额
+	if [ "$v" -gt 1099511627776 ]; then # 1TB
+		echo 0
+	else
+		echo $((v / 1048576))
+	fi
+}
+
+MEM_MB=$(detect_mem_mb)
+if [ "$MEM_MB" -ge 600 ]; then
+	# 限额低于 600MB 时扣完非堆开销所剩无几，退回保守默认值
+	HEAP_MB=$((MEM_MB - 300))
+	# 注意：set -e 下不能用 “[ test ] && 赋值”（测试失败时短路表达式返回非 0 会终止脚本）
+	if [ "$HEAP_MB" -gt 1024 ]; then
+		HEAP_MB=1024
+	fi
+	XMS_MB=$((HEAP_MB / 2))
+else
+	HEAP_MB=256
+	XMS_MB=128
+fi
+DEFAULT_JAVA_OPTS="--enable-native-access=ALL-UNNAMED -XX:+UseCompactObjectHeaders -XX:+UseG1GC -XX:MaxGCPauseMillis=20 -XX:+AlwaysPreTouch -Xms${XMS_MB}m -Xmx${HEAP_MB}m -Xss512k -XX:MaxMetaspaceSize=128m -XX:ReservedCodeCacheSize=64m"
 
 # 程序运行参数（用数组承载，避免密码等含空格/特殊字符时被错误分词）
 APP_ARGS=()

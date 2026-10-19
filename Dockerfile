@@ -51,7 +51,7 @@ WORKDIR /app
 COPY --from=build /build/ssh-copy-tunnel/target/ssh-tunnel.jar app.jar
 
 # 入口脚本：把容器运行时环境变量翻译成程序命令行参数后再启动 JVM。
-# 低内存 JVM 调优（Serial GC + 固定堆 + --enable-native-access 抑制 JDK 25 告警）
+# JVM 调优（G1 GC + 堆按容器内存限额自适应 + --enable-native-access 抑制 JDK 25 告警）
 # 已内置于脚本，可用环境变量 JAVA_OPTS 整体覆盖；命令行显式传入的参数优先级最高
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 # Windows 下检出可能带 CRLF，构建时统一去除，避免 shebang 解析失败

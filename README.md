@@ -61,7 +61,7 @@ services:
       - 16667:6667
     volumes:
       - ./logs:/app/logs
-    mem_limit: 1g   # 需大于镜像默认 -Xmx512m + 元空间/线程栈开销；内存充裕可上调，受限可用 JAVA_OPTS 压低堆
+    mem_limit: 1g   # 镜像内 JVM 堆按内存限额自适应（≈限额-300MB，上限 1024MB），限 1g 可得 ~700MB 堆支撑持续高吞吐；也可用 JAVA_OPTS 显式指定堆
 ```
 
 - 环境变量说明：
