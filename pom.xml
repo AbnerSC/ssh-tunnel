@@ -8,7 +8,7 @@
 	<packaging>pom</packaging>
 	<description>SSH 隧道工具</description>
 	<properties>
-		<revision>1.2.3</revision>
+		<revision>1.2.2</revision>
 
 		<java.version>25</java.version>
 		<maven.compiler.release>${java.version}</maven.compiler.release>

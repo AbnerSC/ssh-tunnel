@@ -61,7 +61,9 @@ services:
       - 16667:6667
     volumes:
       - ./logs:/app/logs
-    mem_limit: 1g   # 镜像内 JVM 堆按内存限额自适应（≈限额-300MB，上限 1024MB），限 1g 可得 ~700MB 堆支撑持续高吞吐；也可用 JAVA_OPTS 显式指定堆
+    mem_limit: 512m
+    memswap_limit: 512m
+    mem_swappiness: 0
 ```
 
 - 环境变量说明：
